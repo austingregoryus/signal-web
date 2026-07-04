@@ -75,6 +75,19 @@ export const editMessage: RawEnvelope = {
   },
 }
 
+export const ownSentEdit: RawEnvelope = {
+  envelope: {
+    sourceUuid: SELF,
+    timestamp: 4200,
+    syncMessage: {
+      sentMessage: {
+        timestamp: 4200,
+        editMessage: { targetSentTimestamp: 2000, dataMessage: { message: 'reply from my phone (edited)' } },
+      },
+    },
+  },
+}
+
 export const readReceipt: RawEnvelope = {
   envelope: {
     sourceUuid: 'alice-uuid',

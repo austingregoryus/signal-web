@@ -51,6 +51,13 @@ describe('parseEnvelope', () => {
     })
   })
 
+  it('parses a synced own-device edit', () => {
+    const [ev] = parseEnvelope(fx.ownSentEdit, fx.SELF)
+    expect(ev).toMatchObject({
+      kind: 'edit', targetAuthorId: fx.SELF, targetTimestamp: 2000, newBody: 'reply from my phone (edited)',
+    })
+  })
+
   it('parses a read receipt into a per-recipient event with self as target author', () => {
     const [ev] = parseEnvelope(fx.readReceipt, fx.SELF)
     expect(ev).toMatchObject({

@@ -16,6 +16,7 @@ export interface DataMessagePayload {
   remoteDelete?: { timestamp?: number }
   destination?: string
   destinationNumber?: string
+  editMessage?: { targetSentTimestamp?: number; dataMessage?: { message?: string } }
 }
 
 export interface RawEnvelope {
