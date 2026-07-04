@@ -28,3 +28,29 @@ Cross-milestone TODOs surfaced during reviews. Each names the milestone that sho
   gains fields not in the SQL. Style/robustness only. (M2 T2/T4 reviews.)
 - **`loadConfig` empty-string env** (`SIGNAL_API_URL=""`/`PORT=""`) bypasses defaults via
   `??`. (M1 T2 review.)
+
+## Added after Milestone 3 (auth)
+
+### For Milestone 4 (web API / WS)
+- **Wire the WS origin guard.** `isAllowedOrigin` (src/auth/csrf.ts) is defined + tested but
+  not yet used — enforce it on the WebSocket upgrade handshake when the WS route lands.
+- **`trustProxy`.** The auth rate limiter keys on `req.ip`. Behind the Cloudflare Tunnel,
+  Fastify must be configured with `trustProxy` (or an explicit forwarded-header parse) or
+  per-IP lockout degrades to global-only. Set this when the app server is wired.
+
+### For Milestone 5 (frontend) / auth UX
+- **`GET /auth/status` and pending sessions.** It currently reports `authenticated:true` for a
+  pending (password-only, 2FA-not-completed) session. The frontend must treat only a `full`
+  session as logged-in; consider returning the session `level` explicitly.
+
+### Recovery / ops
+- **WebAuthn key-loss recovery.** Once a credential is registered, login requires the key
+  (pending→full step-up). If the physical key is lost, the user is locked out. Add an admin
+  CLI path (like set-password) to clear registered credentials and fall back to password-only.
+
+### Minor / opportunistic
+- **Rate-limiter key eviction** (unbounded `keys` map) and **global-cap self-DoS** (a burst of
+  failures across many IPs can lock out the real user) — both low-risk for a single-user tunnel.
+- **Unused `SessionRow` type** in src/store/sessions.ts.
+- **Global-cap `retryAfterMs`** is a fixed `windowMs`; no test for global-window pruning.
+- **`store.test.ts`** tests lack try/finally around `close()` (test-isolation fragility).

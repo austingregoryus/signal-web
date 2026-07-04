@@ -11,9 +11,13 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
-    "link-device": "tsx src/signal/link.ts"
+    "link-device": "tsx src/signal/link.ts",
+    "set-password": "tsx src/setPassword.ts"
   },
   "dependencies": {
+    "@fastify/cookie": "^11.0.2",
+    "@node-rs/argon2": "^2.0.2",
+    "@simplewebauthn/server": "^13.3.2",
     "better-sqlite3-multiple-ciphers": "^12.11.1",
     "fastify": "^5.2.0",
     "tsx": "^4.19.2",

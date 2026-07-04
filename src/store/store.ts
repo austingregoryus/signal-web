@@ -5,6 +5,9 @@ import { ConversationRepo } from './conversations'
 import { ReactionRepo } from './reactions'
 import { ReceiptRepo } from './receipts'
 import { AttachmentRepo } from './attachments'
+import { AuthConfigRepo } from './authConfig'
+import { SessionRepo } from './sessions'
+import { WebAuthnRepo } from './webauthnStore'
 
 export interface Store {
   db: Database.Database
@@ -13,6 +16,9 @@ export interface Store {
   reactions: ReactionRepo
   receipts: ReceiptRepo
   attachments: AttachmentRepo
+  authConfig: AuthConfigRepo
+  sessions: SessionRepo
+  webauthn: WebAuthnRepo
   close(): void
 }
 
@@ -35,6 +41,9 @@ export function openStore(path: string, key: string): Store {
   const reactions = new ReactionRepo(db)
   const receipts = new ReceiptRepo(db)
   const attachments = new AttachmentRepo(db)
+  const authConfig = new AuthConfigRepo(db)
+  const sessions = new SessionRepo(db)
+  const webauthn = new WebAuthnRepo(db)
 
   return {
     db,
@@ -43,6 +52,9 @@ export function openStore(path: string, key: string): Store {
     reactions,
     receipts,
     attachments,
+    authConfig,
+    sessions,
+    webauthn,
     close: () => db.close(),
   }
 }

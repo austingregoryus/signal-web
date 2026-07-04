@@ -1,4 +1,4 @@
-export const SCHEMA_VERSION = 1
+export const SCHEMA_VERSION = 3
 
 export const SCHEMA_SQL = `
 CREATE TABLE IF NOT EXISTS schema_meta (
@@ -63,4 +63,31 @@ CREATE TABLE IF NOT EXISTS attachments (
 );
 CREATE INDEX IF NOT EXISTS idx_attachments_message
   ON attachments(message_author_id, message_timestamp);
+
+CREATE TABLE IF NOT EXISTS auth_config (
+  id            INTEGER PRIMARY KEY CHECK (id = 1),
+  password_hash TEXT
+);
+
+CREATE TABLE IF NOT EXISTS sessions (
+  token_hash TEXT PRIMARY KEY,
+  created_at INTEGER NOT NULL,
+  last_seen  INTEGER NOT NULL,
+  expires_at INTEGER NOT NULL,
+  level      TEXT NOT NULL DEFAULT 'full'
+);
+
+CREATE TABLE IF NOT EXISTS webauthn_credentials (
+  id         TEXT PRIMARY KEY,   -- credential id (base64url)
+  public_key BLOB NOT NULL,
+  counter    INTEGER NOT NULL,
+  transports TEXT,               -- JSON array of transport strings
+  created_at INTEGER NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS webauthn_challenge (
+  id         INTEGER PRIMARY KEY CHECK (id = 1),
+  challenge  TEXT,
+  created_at INTEGER
+);
 `
