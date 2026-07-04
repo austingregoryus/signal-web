@@ -73,6 +73,14 @@ export function parseEnvelope(raw: RawEnvelope, selfId: string): DomainEvent[] {
   const payload: InnerPayload | undefined = isOwn ? e.syncMessage?.sentMessage : e.dataMessage
   if (!payload) return [{ kind: 'ignore' }]
 
+  // sync-side edit (own edit made from another device)
+  if (isOwn && payload.editMessage) {
+    const em = payload.editMessage
+    if (em.targetSentTimestamp != null && em.dataMessage?.message != null) {
+      return [{ kind: 'edit', targetAuthorId: selfId, targetTimestamp: em.targetSentTimestamp, newBody: em.dataMessage.message, editedTimestamp: e.timestamp ?? em.targetSentTimestamp }]
+    }
+  }
+
   // remoteDelete
   if (payload.remoteDelete?.timestamp != null) {
     return [{ kind: 'delete', targetAuthorId: isOwn ? selfId : senderId, targetTimestamp: payload.remoteDelete.timestamp }]
