@@ -1,8 +1,17 @@
 # Signal Web — Design Spec
 
 **Date:** 2026-07-03
-**Status:** Approved design — pending implementation plan
+**Status:** Approved design (rev. 2, post-review) — pending implementation plan
 **Author:** Austin (with Claude)
+
+> **Rev 2 changelog:** Incorporated two independent design reviews (security/privacy and
+> architecture/feasibility). Added: linked-device sync (own-sent) message handling,
+> message dedup + edit/delete handling, reconnect/replay semantics, concrete SQLCipher
+> library choice, profile name/avatar work item, session hardening + login rate-limiting +
+> CSRF, attachment-proxy hardening, log hygiene, device-revocation runbook, backup policy,
+> security headers. Decisions: (a) custom login only, no Cloudflare Access; (b) YubiKey
+> optional/default-on with password fallback; (c) auto-unlock at-rest keys with documented
+> limitation.
 
 ## 1. Purpose
 
@@ -87,18 +96,50 @@ tested independently.
 ### 5.2 Backend — `signal-web-app` (Fastify + TypeScript)
 - **Signal adapter** — the single module that knows signal-cli's API shape.
   Subscribes to its WebSocket; calls its REST. Everything else in the app depends on
-  a clean internal interface, not on signal-cli directly.
-- **Auth** — password (Argon2id) + optional WebAuthn/YubiKey second factor;
-  long-lived encrypted session cookie.
+  a clean internal interface, not on signal-cli directly. Responsibilities:
+  - **Ingest ALL envelope types**, not just inbound `dataMessage`. Critically, because
+    this is a *linked* device, messages the user sends **from his own phone** arrive as
+    `syncMessage.sentMessage` and must be stored as **outgoing** messages. Without this,
+    every thread renders one-sided — the single most likely "looks broken" bug. Also
+    handle `receiptMessage`, `typingMessage`, reactions, `remoteDelete` (tombstone),
+    and `editMessage` (Signal edits mutate an existing row).
+  - **Auto-reconnect with exponential backoff + heartbeat/ping** on the signal-cli WS;
+    exactly **one** consumer of that socket.
+- **Auth** — password (Argon2id) + WebAuthn/YubiKey second factor, **default-on with an
+  opt-out and password fallback** (per decision). Hardened session:
+  `HttpOnly; Secure; SameSite=Strict` cookie backed by a **server-side, revocable**
+  session store (not a self-contained token); absolute lifetime cap + idle timeout;
+  "log out all sessions" / rotation path. **Login rate-limiting** (per-IP + global,
+  exponential backoff/lockout). **CSRF** protection on all state-changing routes and an
+  `Origin` check on the WebSocket upgrade.
 - **Message store** — SQLCipher (AES-256) DB caching a rolling ~2-week window:
-  conversations, messages, reactions, receipts, and attachment metadata. A scheduled
-  prune job enforces retention.
+  conversations, messages, reactions, receipts, and attachment metadata. It is the
+  **single source of truth** for browser replay. Key modeling rules:
+  - Idempotent **upsert on `(author, timestamp)`** (WS reconnects can redeliver).
+  - Reactions and receipts keyed by their target `(author, timestamp)`; **tolerate
+    orphans** (target pruned or not-yet-arrived). Group receipts are **per-recipient
+    rows**, not a single boolean.
+  - Typing indicators are **memory-only** — never persisted or pruned.
+  - A scheduled prune job enforces retention.
+- **Profile/contact service** — names & avatars are historically the flakiest part of
+  signal-cli-rest-api and have no single reliable source on a linked device. Explicit
+  work item: fetch-and-cache profiles/contacts, store avatars as files, refresh
+  periodically, and **fall back to phone-number display** when a name hasn't synced.
 - **Web API** — REST for conversation list and history; a WebSocket that pushes live
-  events (new message, receipt, typing, reaction) to the browser.
+  events (new message, receipt, typing, reaction) to the browser. Browser reconnect
+  sends a **cursor**; backend replays from the DB (idempotent). Composer receives
+  send success/failure feedback from the signal-cli REST call.
 - **Attachment proxy** — fetches attachments from signal-cli, stores them encrypted at
-  rest, and serves them only to the authenticated session.
-- **No-index middleware** — sets `X-Robots-Tag` on every response and serves
-  `robots.txt` (see §8).
+  rest, serves them **only to the authenticated session**. Hardening: opaque internal
+  IDs mapped through the DB (never client-supplied paths/URLs), verify the attachment
+  belongs to a cached message, canonicalize + confine any filesystem path to the store
+  dir, no public/guessable attachment URLs. Cap attachment size; **stream to disk** on
+  receive rather than buffering large base64 blobs in memory.
+- **No-index middleware** — sets `X-Robots-Tag` and standard security headers (CSP,
+  HSTS, `X-Content-Type-Options: nosniff`, `frame-ancestors 'none'`,
+  `Referrer-Policy: no-referrer`) on every response, and serves `robots.txt` (see §8).
+- **Device-state monitor** — detect the "unlinked / errored" signal-cli state (phone
+  revoked the device, or key state lost) and surface a re-link QR in the UI.
 
 ### 5.3 Frontend — React + TypeScript
 - Conversation list: names, avatars, unread badges.
@@ -106,17 +147,22 @@ tested independently.
 - Composer: text, send attachment, add reaction.
 - Live updates over the browser WebSocket; typing indicators.
 - Background notifications (Web Notifications API + title/badge) when a message
-  arrives while the tab is not focused.
+  arrives while the tab is not focused. **Default to content-less notifications**
+  ("New message") so message text doesn't leak into the work machine's OS notification
+  history; showing content is an explicit opt-in.
 - `<meta name="robots" content="noindex, nofollow">` in the document head.
 
 ## 6. Data flow
 
-- **Inbound:** family sends → Signal → signal-cli decrypts → WS event to backend →
-  backend writes to SQLCipher and pushes over the browser WS → UI updates + notify.
-- **Outbound:** user composes → browser WS/REST → backend → signal-cli REST → Signal
-  → family.
-- **History:** UI requests a conversation → backend serves from SQLCipher (only ever
-  the last ~2 weeks).
+- **Inbound (from others):** family sends → Signal → signal-cli decrypts → WS event to
+  backend → backend upserts to SQLCipher and pushes over the browser WS → UI + notify.
+- **Inbound (own-sent from phone):** user sends from his phone → arrives at the linked
+  device as `syncMessage.sentMessage` → backend stores as an **outgoing** message and
+  pushes to the browser, so threads stay two-sided across devices.
+- **Outbound (from web):** user composes → browser WS/REST → backend → signal-cli REST
+  → Signal → family; send success/failure surfaced back to the composer.
+- **History / replay:** UI requests a conversation (or reconnects with a cursor) →
+  backend serves from SQLCipher (only ever the last ~2 weeks), idempotently.
 
 ## 7. Retention
 
@@ -157,16 +203,51 @@ therefore encrypts data everywhere *except* the moment of use, and minimizes exp
 - Secrets and encryption keys injected via environment/secret files; never committed,
   never stored in the DB.
 
-**Auth:**
+**Auth (decision: custom login only — no Cloudflare Access):**
 - Password hashed with **Argon2id**.
-- Optional **WebAuthn/YubiKey** second factor (works in-browser, no install).
-- Encrypted, long-lived session cookie to minimize login friction.
+- **WebAuthn/YubiKey** second factor, **default-on with opt-out and password fallback**
+  (works in-browser, no install).
+- **Hardened session:** `HttpOnly; Secure; SameSite=Strict` cookie backed by a
+  **server-side revocable session store** (not a self-contained token); absolute
+  lifetime cap + idle timeout; "log out all sessions" path.
+- **Login rate-limiting:** per-IP + global throttle with exponential backoff/lockout
+  (Argon2id alone does not stop online guessing).
+- **CSRF protection** on all state-changing routes; **`Origin` check** on the WebSocket
+  upgrade handshake.
+- Since we chose custom-login-only, this app's login page IS internet-reachable, so the
+  above hardening (rate-limit, session revocation, CSRF, default-on 2FA) is mandatory,
+  not optional.
 
-**Documented limitation:** at-rest encryption defends against a stolen disk or
-powered-off machine. It does **not** defend against compromise of the *running*
+**Key management (decision: auto-unlock, documented limitation):**
+- The SQLCipher key and the LUKS/volume passphrase are read at startup from a
+  **protected secret file** on the box (tight perms, `env_file`/Docker `secrets:`,
+  excluded from git — never in a committed compose file), so the machine reboots
+  unattended after a power blip.
+- **Documented consequence:** at-rest encryption therefore protects a disk removed from
+  a **powered-off** machine, but does **not** protect a box stolen while running or
+  mid-reboot (the key is available on the same disk). Accepted tradeoff in exchange for
+  unattended uptime.
+
+**Log hygiene:** app and signal-cli-rest-api log levels set to avoid message bodies,
+phone numbers, attachment contents, and the linking QR/token; scrub PII from request
+logs and error handlers; do not persist logs unencrypted long-term.
+
+**Backups:** back up **ciphertext only** (encrypted volume / SQLCipher file); the key is
+**never co-located** with a backup. If that can't be guaranteed, the policy is
+explicitly **no backups** (retention is short anyway).
+
+**Linked-device revocation (blast radius + recovery):** the signal-cli key material is
+the critical asset; its compromise allows reading forward messages and sending as the
+user until revoked. Because the phone stays primary, recovery is always available:
+revoke the device from the phone (Settings → Linked Devices) and re-link a fresh device
+(no history backfill). This runbook ships with the deployment docs.
+
+**Documented limitation (running server):** at-rest encryption defends against a stolen
+disk or powered-off machine. It does **not** defend against compromise of the *running*
 server, because keys are necessarily in memory to display messages. Mitigations:
-minimal and patched host, strong auth, hidden origin (Cloudflare Tunnel), and the
-short retention window.
+minimal and patched host (pin the signal-cli-rest-api image to a digest; enable
+unattended security updates; periodic image refresh), strong auth, hidden origin
+(Cloudflare Tunnel), short retention.
 
 ## 10. Hosting & access
 
@@ -206,7 +287,21 @@ short retention window.
 
 - **Frontend:** React + TypeScript
 - **Backend:** Node + TypeScript (Fastify), WebSocket
-- **Storage:** SQLCipher (encrypted SQLite)
-- **Signal engine:** `bbernhard/signal-cli-rest-api` (JSON-RPC mode)
-- **Packaging:** Docker Compose
-- **Exposure:** Cloudflare Tunnel (VPS fallback)
+- **Storage:** SQLCipher via **`better-sqlite3-multiple-ciphers`** (synchronous,
+  prebuilt binaries, SQLCipher-compatible). Build the app image on **Debian-slim**
+  (not Alpine/musl) so prebuilds resolve; otherwise include `python3`/`build-essential`
+  for node-gyp.
+- **Signal engine:** `bbernhard/signal-cli-rest-api` in **json-rpc mode**; WS at
+  `/v1/receive/{number}` for streaming envelopes, REST for send/attachments/groups/
+  contacts/reactions/receipts/typing and QR linking (`/v1/qrcodelink`). Pin to a digest.
+- **Packaging:** Docker Compose (private network; app↔engine over localhost/socket).
+- **Exposure:** Cloudflare Tunnel (VPS fallback).
+
+## 14. Dev loop & fixtures
+
+signal-cli needs a real linked phone, so CI cannot link a device. To keep the dev loop
+fast: during one linking session, **record a handful of real WS envelopes** (inbound
+message, reaction, receipt, typing, `syncMessage` sent-from-phone, group update) and
+replay them through a fake WS server against the mocked adapter. Use a **dedicated
+burner Signal number** — never the real account — for the manual end-to-end smoke test.
+The single real-container E2E path stays manual/nightly, not in CI.
