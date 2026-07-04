@@ -3,12 +3,16 @@ import { SCHEMA_SQL, SCHEMA_VERSION } from './schema'
 import { MessageRepo } from './messages'
 import { ConversationRepo } from './conversations'
 import { ReactionRepo } from './reactions'
+import { ReceiptRepo } from './receipts'
+import { AttachmentRepo } from './attachments'
 
 export interface Store {
   db: Database.Database
   messages: MessageRepo
   conversations: ConversationRepo
   reactions: ReactionRepo
+  receipts: ReceiptRepo
+  attachments: AttachmentRepo
   close(): void
 }
 
@@ -29,12 +33,16 @@ export function openStore(path: string, key: string): Store {
   const messages = new MessageRepo(db)
   const conversations = new ConversationRepo(db)
   const reactions = new ReactionRepo(db)
+  const receipts = new ReceiptRepo(db)
+  const attachments = new AttachmentRepo(db)
 
   return {
     db,
     messages,
     conversations,
     reactions,
+    receipts,
+    attachments,
     close: () => db.close(),
   }
 }
