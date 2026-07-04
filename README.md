@@ -13,18 +13,29 @@ and send messages from a browser. See the design spec in
    and keep the generated `DB_KEY`). An `.env` is created for you on first run if missing.
 2. Enable the linking page for bootstrap: set `ENABLE_LINK_PAGE=true` in `.env`
    (it is **off by default** so a public deployment isn't exposed).
-3. `docker compose up --build`
-4. In the startup logs you'll see a line like:
+3. **Link the device (one-time), using the linking override.** `signal-cli-rest-api`'s
+   normal `json-rpc` mode can't link a device, so this override runs it in `normal` mode
+   just for linking:
+   ```bash
+   docker compose -f docker-compose.yml -f docker-compose.link.yml up --build
+   ```
+   Wait ~60–90s for signal-cli to finish booting. In the app logs you'll see:
    ```
    [link] Open http://localhost:8090/link?t=XXXXXXXX to link your device.
    ```
-   **Open that URL** (it carries a one-time bootstrap token). The page shows the QR code —
-   scan it from the phone via **Signal → Settings → Linked Devices → Link New Device**.
-   A live **✅ Connected** indicator appears once the server links (usually within ~30s — no
-   restart needed, the app auto-reconnects). Use *Regenerate QR* if the code expires first.
+   **Open that URL** (it carries a one-time bootstrap token). Scan the QR from
+   **Signal → Settings → Linked Devices → Link New Device**, and wait until the phone
+   shows the new `signal-web` device. (The app's receiver will log errors here — expected
+   in `normal` mode; you only need the QR.)
+4. **Stop (Ctrl-C) and run the normal stack** (`json-rpc`, for the live message stream):
+   ```bash
+   docker compose up -d
+   ```
+   Within ~30s the app logs `[signal] connected to signal-cli` and messages start flowing
+   into the encrypted store automatically.
 
-That's it. Messages then flow into the encrypted store automatically. (The browser UI for
-reading/sending — Milestone 5 — is not built yet; until then the app is API-only.)
+(The browser UI for reading/sending — Milestone 5 — is not built yet; until then the app
+is API-only.)
 
 ## Notes
 - A linked device only receives messages from the moment of linking forward; there is no

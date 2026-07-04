@@ -1,0 +1,22 @@
+# Override for the ONE-TIME device-linking step.
+#
+# signal-cli-rest-api's `json-rpc` mode (which we use for the live message stream)
+# cannot perform device linking — `/v1/qrcodelink` returns HTTP 400. So we link the
+# device with the API temporarily in `normal` mode, which supports linking. The linked
+# account state is stored in the `signal-cli-data` volume, so it persists when you
+# switch back to `json-rpc` for normal operation.
+#
+# Usage (from the project directory):
+#   1. docker compose -f docker-compose.yml -f docker-compose.link.yml up --build
+#   2. Grab the  http://localhost:8090/link?t=...  URL from the app logs and open it.
+#   3. Scan the QR from Signal → Settings → Linked Devices → Link New Device.
+#      Wait until the phone shows the new "signal-web" device.
+#   4. Ctrl-C to stop, then run the normal stack:  docker compose up -d
+#
+# During linking the app's message receiver will log errors (the json-rpc receive
+# stream doesn't exist in normal mode) — that's expected and harmless; you only need
+# the QR to render here.
+services:
+  signal-cli-rest-api:
+    environment:
+      - MODE=normal
