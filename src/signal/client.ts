@@ -113,7 +113,10 @@ export class SignalClient {
     const res = await this.fetchImpl(
       this.url(`/v1/qrcodelink?device_name=${encodeURIComponent(deviceName)}`),
     )
-    if (!res.ok) throw new Error(`qrcodelink failed: ${res.status}`)
+    if (!res.ok) {
+      const detail = await res.text().catch(() => '')
+      throw new Error(`qrcodelink failed: ${res.status} ${detail.slice(0, 300)}`.trim())
+    }
     const bytes = Buffer.from(await res.arrayBuffer())
     return { contentType: res.headers.get('content-type') ?? 'image/png', bytes }
   }

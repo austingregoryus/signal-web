@@ -139,9 +139,11 @@ export function registerLinkRoute(app: FastifyInstance, deps: LinkRouteDeps): vo
     try {
       const qr = await deps.client.getLinkingQr(deps.deviceName)
       return harden(reply).header('content-type', qr.contentType).send(qr.bytes)
-    } catch {
-      // signal-cli not reachable yet, or already linked — surface a clear status.
-      return reply.code(503).send({ error: 'qr_unavailable' })
+    } catch (err) {
+      // signal-cli not reachable yet, or the endpoint errored — surface why.
+      const detail = err instanceof Error ? err.message : String(err)
+      console.error(`[link] qr fetch failed: ${detail}`)
+      return reply.code(503).send({ error: 'qr_unavailable', detail })
     }
   })
 
