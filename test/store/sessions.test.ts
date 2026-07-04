@@ -66,4 +66,23 @@ describe('SessionRepo', () => {
     s.sessions.revokeAll()
     expect(s.sessions.count()).toBe(0)
   })
+
+  it('creates a full session by default', () => {
+    const s = open()
+    const token = s.sessions.create(T0, policy)
+    expect(s.sessions.getLevel(token)).toBe('full')
+  })
+
+  it('creates a pending session that can be upgraded to full', () => {
+    const s = open()
+    const token = s.sessions.create(T0, policy, 'pending')
+    expect(s.sessions.getLevel(token)).toBe('pending')
+    s.sessions.upgrade(token)
+    expect(s.sessions.getLevel(token)).toBe('full')
+  })
+
+  it('returns null level for an unknown token', () => {
+    const s = open()
+    expect(s.sessions.getLevel('nope')).toBe(null)
+  })
 })

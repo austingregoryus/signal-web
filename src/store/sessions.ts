@@ -20,15 +20,26 @@ function hashToken(token: string): string {
 export class SessionRepo {
   constructor(private readonly db: Database.Database) {}
 
-  create(now: number, policy: SessionPolicy): string {
+  create(now: number, policy: SessionPolicy, level: 'pending' | 'full' = 'full'): string {
     const token = randomBytes(32).toString('base64url')
     this.db
       .prepare(
-        `INSERT INTO sessions (token_hash, created_at, last_seen, expires_at)
-         VALUES (?, ?, ?, ?)`,
+        `INSERT INTO sessions (token_hash, created_at, last_seen, expires_at, level)
+         VALUES (?, ?, ?, ?, ?)`,
       )
-      .run(hashToken(token), now, now, now + policy.ttlMs)
+      .run(hashToken(token), now, now, now + policy.ttlMs, level)
     return token
+  }
+
+  getLevel(token: string): 'pending' | 'full' | null {
+    const row = this.db
+      .prepare('SELECT level FROM sessions WHERE token_hash = ?')
+      .get(hashToken(token)) as { level: 'pending' | 'full' } | undefined
+    return row ? row.level : null
+  }
+
+  upgrade(token: string): void {
+    this.db.prepare(`UPDATE sessions SET level = 'full' WHERE token_hash = ?`).run(hashToken(token))
   }
 
   validate(token: string, now: number, policy: SessionPolicy): boolean {

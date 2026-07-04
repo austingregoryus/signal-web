@@ -52,6 +52,10 @@ export async function authPlugin(app: FastifyInstance, opts: AuthPluginOptions):
       await reply.code(401).send({ error: 'unauthorized' })
       return
     }
+    if (store.sessions.getLevel(token) !== 'full') {
+      await reply.code(401).send({ error: '2fa_required' })
+      return
+    }
     if (req.method !== 'GET' && req.method !== 'HEAD') {
       const headerToken = req.headers['x-csrf-token']
       const csrfHeader = Array.isArray(headerToken) ? headerToken[0] : headerToken
@@ -77,10 +81,11 @@ export async function authPlugin(app: FastifyInstance, opts: AuthPluginOptions):
       return reply.code(401).send({ error: 'invalid_credentials' })
     }
     limiter.recordSuccess(ip)
-    const token = store.sessions.create(now, sessionPolicy)
+    const hasCred = store.webauthn.hasCredential()
+    const token = store.sessions.create(now, sessionPolicy, hasCred ? 'pending' : 'full')
     const csrf = issueCsrfToken()
     setSessionCookies(reply, token, csrf)
-    return reply.send({ ok: true, webauthnRequired: store.webauthn.hasCredential() })
+    return reply.send({ ok: true, webauthnRequired: hasCred })
   })
 
   app.post('/auth/logout', { preHandler: app.requireAuth }, async (req, reply) => {
@@ -114,16 +119,32 @@ export async function authPlugin(app: FastifyInstance, opts: AuthPluginOptions):
     return reply.code(ok ? 200 : 400).send({ ok })
   })
 
-  app.post('/auth/webauthn/login/options', async () => {
+  app.post('/auth/webauthn/login/options', async (req, reply) => {
+    const token = req.cookies[SESSION_COOKIE]
+    if (!token || !store.sessions.validate(token, Date.now(), sessionPolicy)) {
+      return reply.code(401).send({ error: 'unauthorized' })
+    }
     return startAuthentication(store.webauthn, webauthn, Date.now())
   })
 
   app.post('/auth/webauthn/login/verify', async (req, reply) => {
-    const ok = await finishAuthentication(store.webauthn, webauthn, req.body as never, Date.now())
-    if (!ok) return reply.code(401).send({ ok: false })
-    const token = store.sessions.create(Date.now(), sessionPolicy)
-    const csrf = issueCsrfToken()
-    setSessionCookies(reply, token, csrf)
+    const ip = req.ip
+    const now = Date.now()
+    const decision = limiter.check(ip, now)
+    if (!decision.allowed) {
+      return reply.code(429).send({ error: 'rate_limited', retryAfterMs: decision.retryAfterMs })
+    }
+    const token = req.cookies[SESSION_COOKIE]
+    if (!token || !store.sessions.validate(token, now, sessionPolicy)) {
+      return reply.code(401).send({ ok: false })
+    }
+    const ok = await finishAuthentication(store.webauthn, webauthn, req.body as never, now)
+    if (!ok) {
+      limiter.recordFailure(ip, now)
+      return reply.code(401).send({ ok: false })
+    }
+    limiter.recordSuccess(ip)
+    store.sessions.upgrade(token)
     return reply.send({ ok: true })
   })
 }

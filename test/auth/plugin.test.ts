@@ -98,6 +98,22 @@ describe('authPlugin', () => {
     expect(res.statusCode).toBe(401)
   })
 
+  it('requires the second factor when a credential is registered', async () => {
+    store.webauthn.addCredential({
+      id: 'c1',
+      publicKey: new Uint8Array([1, 2, 3]),
+      counter: 0,
+      transports: ['usb'],
+      createdAt: 1,
+    })
+    const res = await app.inject({ method: 'POST', url: '/auth/login', payload: { password: 'hunter2hunter2' } })
+    expect(res.statusCode).toBe(200)
+    expect(res.json().webauthnRequired).toBe(true)
+    const session = cookieFrom(res, 'sw_session')
+    const protectedRes = await app.inject({ method: 'GET', url: '/protected', cookies: { sw_session: session! } })
+    expect(protectedRes.statusCode).toBe(401)
+  })
+
   it('locks out after repeated wrong passwords', async () => {
     for (let i = 0; i < 3; i++) {
       await app.inject({ method: 'POST', url: '/auth/login', payload: { password: 'wrong' } })
