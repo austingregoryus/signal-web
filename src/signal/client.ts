@@ -109,6 +109,15 @@ export class SignalClient {
     return (await res.json()) as Array<{ id: string; name?: string }>
   }
 
+  async getLinkingQr(deviceName: string): Promise<{ contentType: string; bytes: Buffer }> {
+    const res = await this.fetchImpl(
+      this.url(`/v1/qrcodelink?device_name=${encodeURIComponent(deviceName)}`),
+    )
+    if (!res.ok) throw new Error(`qrcodelink failed: ${res.status}`)
+    const bytes = Buffer.from(await res.arrayBuffer())
+    return { contentType: res.headers.get('content-type') ?? 'image/png', bytes }
+  }
+
   async getAccountUuid(): Promise<string | null> {
     try {
       const res = await this.fetchImpl(this.url('/v1/accounts'))

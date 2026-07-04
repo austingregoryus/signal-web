@@ -10,6 +10,7 @@ import { authPlugin } from '../auth/plugin'
 import { registerRestApi } from '../api/rest'
 import { registerBrowserWs } from '../api/wsRoute'
 import { registerAttachmentRoute } from '../api/attachments'
+import { registerLinkRoute } from '../api/linkRoute'
 import { AttachmentBlobStore } from '../store/attachmentsBlob'
 import { ProfileService } from '../profile/service'
 import { pruneOlderThan } from '../store/prune'
@@ -27,12 +28,14 @@ export async function main(): Promise<void> {
   const blobs = new AttachmentBlobStore(config.attachmentDir, config.dbKey)
   const profile = new ProfileService({ store, client, avatarDir: config.attachmentDir })
 
+  // Live connection state of the signal-cli receiver, surfaced on the linking page.
+  const signalState = { connected: false }
   const receiver = new SignalReceiver({
     wsBaseUrl: config.signalWsUrl,
     signalNumber: config.signalNumber,
     onEvent: (ev) => bridge.handleEnvelope(ev.raw),
-    onOpen: () => console.log('[signal] connected to signal-cli'),
-    onClose: (code) => console.log(`[signal] disconnected (code=${code})`),
+    onOpen: () => { signalState.connected = true; console.log('[signal] connected to signal-cli') },
+    onClose: (code) => { signalState.connected = false; console.log(`[signal] disconnected (code=${code})`) },
     onError: (err) => console.error(`[signal] receiver error: ${err.message}`),
     reconnect: { minDelayMs: 1000, maxDelayMs: 30_000 },
     heartbeatMs: 30_000,
@@ -50,6 +53,13 @@ export async function main(): Promise<void> {
   })
   registerRestApi(app, { store, client, selfId })
   registerAttachmentRoute(app, { store, client, blobs })
+  registerLinkRoute(app, {
+    client,
+    deviceName: process.env.DEVICE_NAME ?? 'signal-web',
+    status: () => signalState.connected,
+    // Bootstrap convenience; disable in production once linked (ENABLE_LINK_PAGE=false).
+    enabled: (process.env.ENABLE_LINK_PAGE ?? 'true') !== 'false',
+  })
   await registerBrowserWs(app, {
     store, hub, allowedOrigin: config.allowedOrigin,
     sessionPolicy: { ttlMs: config.sessionTtlDays * DAY, idleMs: config.sessionIdleDays * DAY },
