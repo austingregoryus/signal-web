@@ -4,3 +4,4 @@ dist/
 link-qr.png
 *.log
 .superpowers/
+/data/

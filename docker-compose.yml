@@ -16,6 +16,10 @@ services:
     depends_on: [signal-cli-rest-api]
     ports:
       - "8090:8090"
+    volumes:
+      # Persist the encrypted store (SQLCipher DB) + attachment blobs.
+      # This dir must exist so the DB can be opened on first boot.
+      - ./data:/app/data
     networks: [signalnet]
 
 volumes:
