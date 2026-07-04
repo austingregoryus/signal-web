@@ -2,7 +2,9 @@
   "name": "signal-web",
   "private": true,
   "type": "module",
-  "engines": { "node": ">=24" },
+  "engines": {
+    "node": ">=24"
+  },
   "scripts": {
     "dev": "tsx watch src/index.ts",
     "start": "tsx src/index.ts",
@@ -12,11 +14,13 @@
     "link-device": "tsx src/signal/link.ts"
   },
   "dependencies": {
+    "better-sqlite3-multiple-ciphers": "^12.11.1",
     "fastify": "^5.2.0",
     "tsx": "^4.19.2",
     "ws": "^8.18.0"
   },
   "devDependencies": {
+    "@types/better-sqlite3": "^7.6.13",
     "@types/node": "^22.10.2",
     "@types/ws": "^8.5.13",
     "typescript": "^5.7.2",
