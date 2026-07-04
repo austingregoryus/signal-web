@@ -20,10 +20,11 @@ afterEach(() => {
 describe('openStore', () => {
   it('creates the schema and records the version', () => {
     const store = openStore(tmpDb(), 'test-key-123')
-    const tables = store.db
-      .prepare("SELECT name FROM sqlite_master WHERE type='table' ORDER BY name")
-      .all()
-      .map((r: { name: string }) => r.name)
+    const tables = (
+      store.db
+        .prepare("SELECT name FROM sqlite_master WHERE type='table' ORDER BY name")
+        .all() as { name: string }[]
+    ).map((r) => r.name)
     expect(tables).toContain('messages')
     expect(tables).toContain('conversations')
     expect(tables).toContain('reactions')
