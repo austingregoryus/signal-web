@@ -14,4 +14,12 @@ describe('resolveSelfId', () => {
     const id = await resolveSelfId({ getAccountUuid: async () => { throw new Error('x') } }, '+15551230000')
     expect(id).toBe('+15551230000')
   })
+  it('short-circuits on an explicit uuid override without calling the client', async () => {
+    const id = await resolveSelfId(
+      { getAccountUuid: async () => { throw new Error('should not be called') } },
+      '+15551230000',
+      'explicit-uuid',
+    )
+    expect(id).toBe('explicit-uuid')
+  })
 })

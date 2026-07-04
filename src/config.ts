@@ -3,6 +3,7 @@ export interface AppConfig {
   signalNumber: string
   signalApiUrl: string
   signalWsUrl: string
+  selfUuid: string
   dbPath: string
   dbKey: string
   publicUrl: string
@@ -32,6 +33,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     signalNumber,
     signalApiUrl,
     signalWsUrl: signalApiUrl.replace(/^http/, 'ws'),
+    selfUuid: env.SIGNAL_SELF_UUID ?? '',
     dbPath: env.DB_PATH ?? './data/signal-web.db',
     dbKey,
     publicUrl,

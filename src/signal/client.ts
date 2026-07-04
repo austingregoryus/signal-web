@@ -113,9 +113,15 @@ export class SignalClient {
     try {
       const res = await this.fetchImpl(this.url('/v1/accounts'))
       if (!res.ok) return null
-      const accounts = (await res.json()) as Array<{ number?: string; uuid?: string }>
-      const me = accounts.find((a) => a.number === this.opts.number)
-      return me?.uuid ?? null
+      const data = (await res.json()) as unknown
+      if (!Array.isArray(data)) return null
+      for (const entry of data) {
+        if (entry && typeof entry === 'object' && 'number' in entry) {
+          const e = entry as { number?: string; uuid?: string }
+          if (e.number === this.opts.number && e.uuid) return e.uuid
+        }
+      }
+      return null // array-of-strings shape exposes no uuid
     } catch {
       return null
     }

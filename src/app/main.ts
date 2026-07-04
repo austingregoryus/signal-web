@@ -21,7 +21,7 @@ export async function main(): Promise<void> {
   const config = loadConfig()
   const store = openStore(config.dbPath, config.dbKey)
   const client = new SignalClient({ apiUrl: config.signalApiUrl, number: config.signalNumber })
-  const selfId = await resolveSelfId(client, config.signalNumber)
+  const selfId = await resolveSelfId(client, config.signalNumber, config.selfUuid)
   const hub = new BrowserHub()
   const bridge = new LiveBridge({ store, hub, selfId })
   const blobs = new AttachmentBlobStore(config.attachmentDir, config.dbKey)
