@@ -1,3 +1,4 @@
+import { randomBytes } from 'node:crypto'
 import Fastify from 'fastify'
 import { loadConfig } from '../config'
 import { openStore } from '../store/store'
@@ -53,12 +54,22 @@ export async function main(): Promise<void> {
   })
   registerRestApi(app, { store, client, selfId })
   registerAttachmentRoute(app, { store, client, blobs })
+
+  // Linking page (/link) — OFF by default; opt in with ENABLE_LINK_PAGE=true.
+  // Before a password is set it requires a one-time bootstrap token (printed below);
+  // once a password exists it requires a full admin session.
+  const linkEnabled = (process.env.ENABLE_LINK_PAGE ?? 'false') === 'true'
+  const bootstrapToken = process.env.LINK_BOOTSTRAP_TOKEN ?? randomBytes(16).toString('base64url')
+  const sessionPolicy = { ttlMs: config.sessionTtlDays * DAY, idleMs: config.sessionIdleDays * DAY }
   registerLinkRoute(app, {
     client,
     deviceName: process.env.DEVICE_NAME ?? 'signal-web',
     status: () => signalState.connected,
-    // Bootstrap convenience; disable in production once linked (ENABLE_LINK_PAGE=false).
-    enabled: (process.env.ENABLE_LINK_PAGE ?? 'true') !== 'false',
+    enabled: linkEnabled,
+    passwordIsSet: () => store.authConfig.getPasswordHash() != null,
+    sessionIsFull: (token) =>
+      token != null && store.sessions.validate(token, Date.now(), sessionPolicy) && store.sessions.getLevel(token) === 'full',
+    bootstrapToken,
   })
   await registerBrowserWs(app, {
     store, hub, allowedOrigin: config.allowedOrigin,
@@ -72,4 +83,7 @@ export async function main(): Promise<void> {
 
   await app.listen({ port: config.port, host: '0.0.0.0' })
   console.log(`[app] listening on :${config.port}`)
+  if (linkEnabled && store.authConfig.getPasswordHash() == null) {
+    console.log(`[link] Open ${config.publicUrl}/link?t=${bootstrapToken} to link your device.`)
+  }
 }

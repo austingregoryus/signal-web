@@ -35,40 +35,68 @@ describe('registerLinkRoute', () => {
   afterEach(async () => { await app?.close() })
 
   const stubClient = { getLinkingQr: async () => ({ contentType: 'image/png', bytes: Buffer.from([1, 2, 3]) }) }
+  const TOKEN = 'boot-token-123'
 
-  async function build(enabled: boolean, connected = false): Promise<FastifyInstance> {
+  interface BuildOpts { enabled?: boolean; connected?: boolean; passwordIsSet?: boolean; sessionFull?: boolean }
+  async function build(opts: BuildOpts = {}): Promise<FastifyInstance> {
     app = Fastify()
-    registerLinkRoute(app, { client: stubClient, deviceName: 'signal-web', status: () => connected, enabled })
+    registerLinkRoute(app, {
+      client: stubClient,
+      deviceName: 'signal-web',
+      status: () => opts.connected ?? false,
+      enabled: opts.enabled ?? true,
+      passwordIsSet: () => opts.passwordIsSet ?? false,
+      sessionIsFull: () => opts.sessionFull ?? false,
+      bootstrapToken: TOKEN,
+    })
     await app.ready()
     return app
   }
 
-  it('serves the linking page as HTML', async () => {
-    await build(true)
-    const res = await app.inject({ method: 'GET', url: '/link' })
+  it('serves the linking page as HTML with a valid bootstrap token', async () => {
+    await build()
+    const res = await app.inject({ method: 'GET', url: `/link?t=${TOKEN}` })
     expect(res.statusCode).toBe(200)
     expect(res.headers['content-type']).toContain('text/html')
+    expect(res.headers['x-frame-options']).toBe('DENY')
     expect(res.body).toContain('/link/qr')
     expect(res.body).toContain('Linked Devices')
   })
 
-  it('proxies the QR image bytes', async () => {
-    await build(true)
-    const res = await app.inject({ method: 'GET', url: '/link/qr' })
+  it('rejects the page without the bootstrap token (401)', async () => {
+    await build()
+    expect((await app.inject({ method: 'GET', url: '/link' })).statusCode).toBe(401)
+    expect((await app.inject({ method: 'GET', url: '/link?t=wrong' })).statusCode).toBe(401)
+    expect((await app.inject({ method: 'GET', url: '/link/qr' })).statusCode).toBe(401)
+  })
+
+  it('proxies the QR image bytes with a valid token', async () => {
+    await build()
+    const res = await app.inject({ method: 'GET', url: `/link/qr?t=${TOKEN}` })
     expect(res.statusCode).toBe(200)
     expect(res.headers['content-type']).toBe('image/png')
     expect(Array.from(res.rawPayload)).toEqual([1, 2, 3])
   })
 
-  it('reports connection status', async () => {
-    await build(true, true)
-    const res = await app.inject({ method: 'GET', url: '/link/status' })
+  it('reports connection status with a valid token', async () => {
+    await build({ connected: true })
+    const res = await app.inject({ method: 'GET', url: `/link/status?t=${TOKEN}` })
     expect(res.json()).toEqual({ connected: true })
   })
 
+  it('once a password is set, the token no longer works and a full session is required', async () => {
+    await build({ passwordIsSet: true, sessionFull: false })
+    // token path is closed after configuration
+    expect((await app.inject({ method: 'GET', url: `/link?t=${TOKEN}` })).statusCode).toBe(401)
+    await app.close()
+    // with a full session it is allowed
+    await build({ passwordIsSet: true, sessionFull: true })
+    expect((await app.inject({ method: 'GET', url: '/link' })).statusCode).toBe(200)
+  })
+
   it('returns 404 for the page when disabled', async () => {
-    await build(false)
-    const res = await app.inject({ method: 'GET', url: '/link' })
+    await build({ enabled: false })
+    const res = await app.inject({ method: 'GET', url: `/link?t=${TOKEN}` })
     expect(res.statusCode).toBe(404)
   })
 })

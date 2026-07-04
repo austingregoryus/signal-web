@@ -1,4 +1,5 @@
-import type { FastifyInstance } from 'fastify'
+import { timingSafeEqual } from 'node:crypto'
+import type { FastifyInstance, FastifyRequest } from 'fastify'
 
 interface QrCapableClient {
   getLinkingQr(deviceName: string): Promise<{ contentType: string; bytes: Buffer }>
@@ -9,11 +10,25 @@ export interface LinkRouteDeps {
   deviceName: string
   /** Live connection state of the signal-cli receiver, so the page can show "connected". */
   status: () => boolean
-  /** When false, the linking page is disabled (return 404). Disable in production once linked. */
+  /** When false, the linking routes are not registered at all (404). Safe default is false. */
   enabled: boolean
+  /** True once an admin password has been set — after which linking requires a session. */
+  passwordIsSet: () => boolean
+  /** Validates the sw_session cookie as a FULL session (used once configured). */
+  sessionIsFull: (token: string | undefined) => boolean
+  /** One-time bootstrap token required to view the page before a password is set. */
+  bootstrapToken: string
 }
 
-const PAGE = `<!doctype html>
+function safeEqual(a: string, b: string): boolean {
+  const ab = Buffer.from(a)
+  const bb = Buffer.from(b)
+  if (ab.length !== bb.length) return false
+  return timingSafeEqual(ab, bb)
+}
+
+function renderPage(qrSrc: string, statusUrl: string): string {
+  return `<!doctype html>
 <html lang="en">
 <head>
 <meta charset="utf-8" />
@@ -56,7 +71,7 @@ const PAGE = `<!doctype html>
   <div class="card">
     <h1>Link this device</h1>
     <p class="sub">Connect the server to your Signal account</p>
-    <div class="qr"><img id="qr" alt="Signal linking QR code" src="/link/qr" /></div>
+    <div class="qr"><img id="qr" alt="Signal linking QR code" src="${qrSrc}" /></div>
     <ol>
       <li>Open <strong>Signal</strong> on your phone.</li>
       <li>Go to <strong>Settings → Linked Devices</strong>.</li>
@@ -68,11 +83,13 @@ const PAGE = `<!doctype html>
 <script>
   var qr = document.getElementById('qr');
   var statusEl = document.getElementById('status');
+  var qrSrc = ${JSON.stringify(qrSrc)};
+  var statusUrl = ${JSON.stringify(statusUrl)};
   document.getElementById('refresh').addEventListener('click', function () {
-    qr.src = '/link/qr?ts=' + Date.now();
+    qr.src = qrSrc + (qrSrc.indexOf('?') === -1 ? '?' : '&') + 'ts=' + Date.now();
   });
   function poll() {
-    fetch('/link/status').then(function (r) { return r.json(); }).then(function (s) {
+    fetch(statusUrl).then(function (r) { return r.json(); }).then(function (s) {
       if (s.connected) {
         statusEl.textContent = '\\u2705 Connected \\u2014 linking worked. You can close this page.';
         statusEl.className = 'status on';
@@ -86,26 +103,50 @@ const PAGE = `<!doctype html>
 </script>
 </body>
 </html>`
+}
 
 export function registerLinkRoute(app: FastifyInstance, deps: LinkRouteDeps): void {
   if (!deps.enabled) return
 
-  app.get('/link', async (_req, reply) => {
-    return reply.header('content-type', 'text/html; charset=utf-8').send(PAGE)
+  // Bootstrap: before a password exists, require the one-time token. Once a password is
+  // set, the token path closes and a full admin session is required instead.
+  function authorized(req: FastifyRequest): boolean {
+    if (deps.passwordIsSet()) {
+      const cookies = req.cookies as Record<string, string | undefined> | undefined
+      return deps.sessionIsFull(cookies?.sw_session)
+    }
+    const provided = (req.query as { t?: string } | undefined)?.t ?? ''
+    return deps.bootstrapToken.length > 0 && safeEqual(provided, deps.bootstrapToken)
+  }
+
+  function harden(reply: import('fastify').FastifyReply): import('fastify').FastifyReply {
+    return reply
+      .header('cache-control', 'no-store')
+      .header('x-frame-options', 'DENY')
+      .header('x-content-type-options', 'nosniff')
+      .header('content-security-policy', "default-src 'none'; img-src 'self'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; connect-src 'self'; frame-ancestors 'none'")
+  }
+
+  app.get('/link', async (req, reply) => {
+    if (!authorized(req)) return reply.code(401).send({ error: 'unauthorized' })
+    const t = (req.query as { t?: string } | undefined)?.t
+    const q = t ? `?t=${encodeURIComponent(t)}` : ''
+    return harden(reply).header('content-type', 'text/html; charset=utf-8').send(renderPage(`/link/qr${q}`, `/link/status${q}`))
   })
 
-  app.get('/link/qr', async (_req, reply) => {
+  app.get('/link/qr', async (req, reply) => {
+    if (!authorized(req)) return reply.code(401).send({ error: 'unauthorized' })
     try {
       const qr = await deps.client.getLinkingQr(deps.deviceName)
-      return reply
-        .header('content-type', qr.contentType)
-        .header('cache-control', 'no-store')
-        .send(qr.bytes)
+      return harden(reply).header('content-type', qr.contentType).send(qr.bytes)
     } catch {
       // signal-cli not reachable yet, or already linked — surface a clear status.
       return reply.code(503).send({ error: 'qr_unavailable' })
     }
   })
 
-  app.get('/link/status', async () => ({ connected: deps.status() }))
+  app.get('/link/status', async (req, reply) => {
+    if (!authorized(req)) return reply.code(401).send({ error: 'unauthorized' })
+    return reply.send({ connected: deps.status() })
+  })
 }
