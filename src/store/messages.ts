@@ -65,7 +65,11 @@ export class MessageRepo {
                  @direction, @body, @quoteAuthorId, @quoteTimestamp)
          ON CONFLICT(author_id, timestamp) DO UPDATE SET
            conversation_id = excluded.conversation_id,
-           body            = CASE WHEN messages.deleted = 1 THEN messages.body ELSE excluded.body END,
+           body            = CASE
+             WHEN messages.deleted = 1 OR messages.edited_timestamp IS NOT NULL
+               THEN messages.body
+             ELSE excluded.body
+           END,
            quote_author_id = excluded.quote_author_id,
            quote_timestamp = excluded.quote_timestamp`,
       )

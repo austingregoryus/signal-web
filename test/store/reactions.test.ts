@@ -42,4 +42,14 @@ describe('ReactionRepo', () => {
     s.reactions.remove('uuid-a', 1000, 'uuid-b')
     expect(s.reactions.listForMessage('uuid-a', 1000)).toHaveLength(0)
   })
+
+  it('a stale reaction redelivery does not revert a newer reaction', () => {
+    const s = open()
+    s.reactions.apply({ ...t, reactorId: 'uuid-b', emoji: '👍', timestamp: 1100 })
+    s.reactions.apply({ ...t, reactorId: 'uuid-b', emoji: '❤️', timestamp: 1200 })
+    s.reactions.apply({ ...t, reactorId: 'uuid-b', emoji: '👍', timestamp: 1100 }) // stale redelivery
+    const list = s.reactions.listForMessage('uuid-a', 1000)
+    expect(list).toHaveLength(1)
+    expect(list[0].emoji).toBe('❤️')
+  })
 })

@@ -28,8 +28,8 @@ export class ReactionRepo {
            (target_author_id, target_timestamp, reactor_id, emoji, timestamp)
          VALUES (@targetAuthorId, @targetTimestamp, @reactorId, @emoji, @timestamp)
          ON CONFLICT(target_author_id, target_timestamp, reactor_id) DO UPDATE SET
-           emoji = excluded.emoji,
-           timestamp = excluded.timestamp`,
+           emoji = CASE WHEN excluded.timestamp >= reactions.timestamp THEN excluded.emoji ELSE reactions.emoji END,
+           timestamp = MAX(reactions.timestamp, excluded.timestamp)`,
       )
       .run(r)
   }

@@ -79,4 +79,15 @@ describe('MessageRepo', () => {
     expect(row.deleted).toBe(1)
     expect(row.body).toBeNull()
   })
+
+  it('re-ingest of the original after an edit does not reset the edited body', () => {
+    const s = open()
+    const m = { ...base, timestamp: 1000, direction: 'in' as const, body: 'typo', receivedAt: 1 }
+    s.messages.upsert(m)
+    s.messages.applyEdit('uuid-a', 1000, 'fixed', 1500)
+    s.messages.upsert(m) // redelivery of the original envelope
+    const row = s.messages.listByConversation('conv-1', 10)[0]
+    expect(row.body).toBe('fixed')
+    expect(row.editedTimestamp).toBe(1500)
+  })
 })
