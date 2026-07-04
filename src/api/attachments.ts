@@ -13,6 +13,15 @@ export interface AttachmentDeps {
   maxBytes?: number
 }
 
+const INLINE_SAFE = new Set(['image/png', 'image/jpeg', 'image/gif', 'image/webp'])
+
+export function safeContentType(declared: string | null): { contentType: string; disposition: 'inline' | 'attachment' } {
+  const d = declared ?? 'application/octet-stream'
+  return INLINE_SAFE.has(d)
+    ? { contentType: d, disposition: 'inline' }
+    : { contentType: 'application/octet-stream', disposition: 'attachment' }
+}
+
 export function registerAttachmentRoute(app: FastifyInstance, deps: AttachmentDeps): void {
   const maxBytes = deps.maxBytes ?? 25 * 1024 * 1024
   app.get<{ Params: { id: string } }>(
@@ -33,7 +42,14 @@ export function registerAttachmentRoute(app: FastifyInstance, deps: AttachmentDe
         await deps.blobs.put(row.id, fetched.bytes)
         bytes = fetched.bytes
       }
-      return reply.header('content-type', row.content_type ?? 'application/octet-stream').send(bytes)
+      const { contentType, disposition } = safeContentType(row.content_type)
+      return reply
+        .header('content-type', contentType)
+        .header('content-disposition', disposition)
+        .header('x-content-type-options', 'nosniff')
+        .header('content-security-policy', "default-src 'none'; sandbox")
+        .header('cross-origin-resource-policy', 'same-origin')
+        .send(bytes)
     },
   )
 }
