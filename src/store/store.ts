@@ -2,11 +2,13 @@ import Database from 'better-sqlite3-multiple-ciphers'
 import { SCHEMA_SQL, SCHEMA_VERSION } from './schema'
 import { MessageRepo } from './messages'
 import { ConversationRepo } from './conversations'
+import { ReactionRepo } from './reactions'
 
 export interface Store {
   db: Database.Database
   messages: MessageRepo
   conversations: ConversationRepo
+  reactions: ReactionRepo
   close(): void
 }
 
@@ -26,11 +28,13 @@ export function openStore(path: string, key: string): Store {
 
   const messages = new MessageRepo(db)
   const conversations = new ConversationRepo(db)
+  const reactions = new ReactionRepo(db)
 
   return {
     db,
     messages,
     conversations,
+    reactions,
     close: () => db.close(),
   }
 }
