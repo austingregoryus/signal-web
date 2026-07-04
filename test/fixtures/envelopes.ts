@@ -46,6 +46,19 @@ export const inboundReaction: RawEnvelope = {
   },
 }
 
+export const ownSentReaction: RawEnvelope = {
+  envelope: {
+    sourceUuid: SELF,
+    timestamp: 4100,
+    syncMessage: {
+      sentMessage: {
+        timestamp: 4100,
+        reaction: { emoji: '🎉', targetAuthor: 'alice-uuid', targetSentTimestamp: 1000, isRemove: false },
+      },
+    },
+  },
+}
+
 export const remoteDelete: RawEnvelope = {
   envelope: {
     sourceUuid: 'alice-uuid',

@@ -41,6 +41,15 @@ describe('ingestEnvelope', () => {
     expect(s.reactions.listForMessage(fx.SELF, 2000)[0].emoji).toBe('👍')
   })
 
+  it('applies an own-sent (sync) reaction from the store owner', () => {
+    const s = open()
+    ingestEnvelope(s, fx.inboundText, fx.SELF, 5000)       // alice@1000 exists
+    ingestEnvelope(s, fx.ownSentReaction, fx.SELF, 5100)   // we react to it from our phone
+    const list = s.reactions.listForMessage('alice-uuid', 1000)
+    expect(list).toHaveLength(1)
+    expect(list[0]).toMatchObject({ emoji: '🎉', reactorId: fx.SELF })
+  })
+
   it('tombstones on remoteDelete', () => {
     const s = open()
     ingestEnvelope(s, fx.inboundText, fx.SELF, 5000)       // alice@1000

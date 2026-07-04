@@ -31,6 +31,14 @@ describe('parseEnvelope', () => {
     })
   })
 
+  it('parses an own-sent (sync) reaction with self as the reactor', () => {
+    const [ev] = parseEnvelope(fx.ownSentReaction, fx.SELF)
+    expect(ev).toMatchObject({
+      kind: 'reaction', emoji: '🎉', reactorId: fx.SELF,
+      targetAuthorId: 'alice-uuid', targetTimestamp: 1000, remove: false,
+    })
+  })
+
   it('parses a remote delete', () => {
     const [ev] = parseEnvelope(fx.remoteDelete, fx.SELF)
     expect(ev).toMatchObject({ kind: 'delete', targetAuthorId: 'alice-uuid', targetTimestamp: 1000 })

@@ -124,7 +124,10 @@ export function parseEnvelope(raw: RawEnvelope, selfId: string): DomainEvent[] {
     timestamp: msgTs,
     direction: isOwn ? 'out' : 'in',
     body: payload.message ?? null,
-    quoteAuthorId: payload.quote ? authorId(payload.quote.author, payload.quote.authorNumber) : null,
+    quoteAuthorId:
+      payload.quote && (payload.quote.author || payload.quote.authorNumber)
+        ? authorId(payload.quote.author, payload.quote.authorNumber)
+        : null,
     quoteTimestamp: payload.quote?.id ?? null,
     attachments,
   }]
