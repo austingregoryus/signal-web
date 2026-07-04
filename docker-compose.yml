@@ -1,7 +1,9 @@
 services:
   signal-cli-rest-api:
-    # Pin to a tag now; replace with an image digest before real deployment (spec §9).
-    image: bbernhard/signal-cli-rest-api:0.94
+    # Keep this current: Signal's servers reject outdated signal-cli clients during
+    # linking ("no data to encode"). 0.100 bundles signal-cli 0.14.5. Pin to a digest
+    # before real deployment (spec §9).
+    image: bbernhard/signal-cli-rest-api:0.100
     environment:
       - MODE=json-rpc
     volumes:
