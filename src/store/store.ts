@@ -1,8 +1,10 @@
 import Database from 'better-sqlite3-multiple-ciphers'
 import { SCHEMA_SQL, SCHEMA_VERSION } from './schema'
+import { MessageRepo } from './messages'
 
 export interface Store {
   db: Database.Database
+  messages: MessageRepo
   close(): void
 }
 
@@ -20,8 +22,11 @@ export function openStore(path: string, key: string): Store {
     db.prepare('INSERT INTO schema_meta (version) VALUES (?)').run(SCHEMA_VERSION)
   }
 
+  const messages = new MessageRepo(db)
+
   return {
     db,
+    messages,
     close: () => db.close(),
   }
 }
