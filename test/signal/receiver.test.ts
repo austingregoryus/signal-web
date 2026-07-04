@@ -89,4 +89,65 @@ describe('SignalReceiver', () => {
 
     expect(opened).toBe(true)
   })
+
+  it('reconnects with backoff after an unexpected close', async () => {
+    let connections = 0
+    wss = new WebSocketServer({ port: 0 })
+    await new Promise<void>((resolve) => wss!.on('listening', () => resolve()))
+    const port = (wss.address() as { port: number }).port
+
+    wss.on('connection', (sock) => {
+      connections += 1
+      // Simulate a dropped connection immediately.
+      sock.close()
+    })
+
+    const rx = new SignalReceiver({
+      wsBaseUrl: `ws://127.0.0.1:${port}`,
+      signalNumber: '+15551234567',
+      onEvent: () => {},
+      WebSocketImpl: WebSocket,
+      reconnect: { minDelayMs: 10, maxDelayMs: 100 },
+    })
+    rx.start()
+
+    await new Promise<void>((resolve) => {
+      const check = setInterval(() => {
+        if (connections >= 2) {
+          clearInterval(check)
+          resolve()
+        }
+      }, 5)
+    })
+
+    rx.stop()
+    expect(connections).toBeGreaterThanOrEqual(2)
+  })
+
+  it('stop() prevents further reconnects', async () => {
+    let connections = 0
+    wss = new WebSocketServer({ port: 0 })
+    await new Promise<void>((resolve) => wss!.on('listening', () => resolve()))
+    const port = (wss.address() as { port: number }).port
+
+    wss.on('connection', (sock) => {
+      connections += 1
+      sock.close()
+    })
+
+    const rx = new SignalReceiver({
+      wsBaseUrl: `ws://127.0.0.1:${port}`,
+      signalNumber: '+15551234567',
+      onEvent: () => {},
+      WebSocketImpl: WebSocket,
+      reconnect: { minDelayMs: 10, maxDelayMs: 100 },
+    })
+    rx.start()
+
+    await new Promise<void>((resolve) => setTimeout(resolve, 50))
+    rx.stop()
+    const seenAtStop = connections
+    await new Promise<void>((resolve) => setTimeout(resolve, 100))
+    expect(connections).toBe(seenAtStop)
+  })
 })
