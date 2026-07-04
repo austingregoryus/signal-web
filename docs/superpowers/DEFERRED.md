@@ -54,3 +54,34 @@ Cross-milestone TODOs surfaced during reviews. Each names the milestone that sho
 - **Unused `SessionRow` type** in src/store/sessions.ts.
 - **Global-cap `retryAfterMs`** is a fixed `windowMs`; no test for global-window pruning.
 - **`store.test.ts`** tests lack try/finally around `close()` (test-isolation fragility).
+
+## Added after Milestone 4 (web API & bridge)
+
+### Deployment (M6)
+- **Must sit behind a trusted reverse proxy.** `trustProxy` defaults true; if the app were
+  exposed directly, a client could spoof `X-Forwarded-For` to reset per-IP login lockout
+  (bounded by the global cap). Our target IS behind a Cloudflare Tunnel, so this holds —
+  document it and don't expose the origin directly.
+
+### Frontend / client contract (M5)
+- **Live events are "pokes."** The bridge broadcasts minimal live events
+  (`{type:'message', timestamp}`, reaction/receipt without conversationId) — the browser must
+  REST-refetch the affected conversation on a poke. Cursor replay, by contrast, sends full
+  message rows. The M5 client must handle both shapes.
+- **Replay is not exhaustive.** `hub.replay` fetches the newest N (200) per conversation then
+  filters `> cursor`; after a long, busy disconnect (>200 new msgs in one conversation), the
+  gap isn't fully replayed. The client should reconcile via REST history, not rely on replay
+  alone.
+
+### Correctness / robustness (opportunistic)
+- **selfId auto-detection** still depends on the real `/v1/accounts` shape; the reliable path
+  is the `SIGNAL_SELF_UUID` override. Consider capturing selfId from the first sync-sent
+  envelope's sourceUuid at runtime as a fully-automatic alternative.
+- **Send-timestamp fallback** (`Date.now()` when `/v2/send` returns none) can create a
+  duplicate row vs the later sync-sent envelope (different timestamp keys).
+- **Receiver `start()`** should `clearHeartbeat()` + close any prior socket at the top
+  (latent double-heartbeat if start() is called twice without an intervening close).
+- **Heartbeat has no pong/liveness timeout** — a half-open socket relies on TCP/close.
+- **Attachment blob store** derives its key as `sha256(dbKey)`; prefer HKDF with a distinct
+  context string for independent key material.
+- **No test asserts** the attachment blob file is ciphertext on disk (round-trip is tested).
