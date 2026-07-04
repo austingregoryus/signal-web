@@ -1,0 +1,25 @@
+services:
+  signal-cli-rest-api:
+    # Pin to a tag now; replace with an image digest before real deployment (spec §9).
+    image: bbernhard/signal-cli-rest-api:0.94
+    environment:
+      - MODE=json-rpc
+    volumes:
+      - signal-cli-data:/home/.local/share/signal-cli
+    networks: [signalnet]
+    # NOTE: no published port in normal operation. For the ONE-TIME linking step you
+    # may temporarily add:  ports: ["8080:8080"]  — or use `docker compose exec` (below).
+
+  app:
+    build: .
+    env_file: .env
+    depends_on: [signal-cli-rest-api]
+    ports:
+      - "8090:8090"
+    networks: [signalnet]
+
+volumes:
+  signal-cli-data:
+
+networks:
+  signalnet:
