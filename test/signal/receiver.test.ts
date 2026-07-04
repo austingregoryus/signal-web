@@ -66,4 +66,27 @@ describe('SignalReceiver', () => {
 
     expect(events.length).toBe(0)
   })
+
+  it('calls onOpen when the connection is established', async () => {
+    wss = new WebSocketServer({ port: 0 })
+    await new Promise<void>((resolve) => wss!.on('listening', () => resolve()))
+    const port = (wss.address() as { port: number }).port
+
+    let opened = false
+    const rx = new SignalReceiver({
+      wsBaseUrl: `ws://127.0.0.1:${port}`,
+      signalNumber: '+15551234567',
+      onEvent: () => {},
+      onOpen: () => {
+        opened = true
+      },
+      WebSocketImpl: WebSocket,
+    })
+    rx.start()
+
+    await new Promise<void>((resolve) => setTimeout(resolve, 250))
+    rx.stop()
+
+    expect(opened).toBe(true)
+  })
 })

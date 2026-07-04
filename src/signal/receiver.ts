@@ -11,6 +11,8 @@ export interface ReceiverOptions {
   signalNumber: string
   onEvent: (ev: ReceiverEvent) => void
   onError?: (err: Error) => void
+  onOpen?: () => void
+  onClose?: (code: number) => void
   WebSocketImpl?: typeof WebSocket
 }
 
@@ -39,6 +41,8 @@ export class SignalReceiver {
     })
 
     ws.on('error', (err: Error) => this.opts.onError?.(err))
+    ws.on('open', () => this.opts.onOpen?.())
+    ws.on('close', (code: number) => this.opts.onClose?.(code))
   }
 
   stop(): void {

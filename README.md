@@ -17,7 +17,13 @@ and send messages from a browser. See the design spec in
    docker compose cp app:/app/link-qr.png ./link-qr.png
    ```
    Open `link-qr.png` and scan: **Signal → Settings → Linked Devices → Link New Device**.
-4. `docker compose logs -f app` — send a test message; you should see
+4. After the phone shows the device as linked, restart the app so it connects to the
+   now-ready signal-cli:
+   ```bash
+   docker compose restart app
+   ```
+   You should then see `[signal] connected to signal-cli` in the logs.
+5. `docker compose logs -f app` — send a test message; you should see
    `envelope kind=data` (inbound) and `envelope kind=sync-sent` (sent from your phone).
 
 ## Notes

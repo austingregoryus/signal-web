@@ -15,6 +15,8 @@ async function main(): Promise<void> {
       console.log(`[signal] envelope kind=${ev.kind} ts=${ts}`)
     },
     onError: (err) => console.error(`[signal] receiver error: ${err.message}`),
+    onOpen: () => console.log('[signal] connected to signal-cli'),
+    onClose: (code) => console.log(`[signal] disconnected from signal-cli (code=${code})`),
   })
   receiver.start()
 
