@@ -3,3 +3,4 @@ dist/
 .env
 link-qr.png
 *.log
+.superpowers/
