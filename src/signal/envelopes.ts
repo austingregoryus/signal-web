@@ -1,14 +1,39 @@
 export type EnvelopeKind = 'data' | 'sync-sent' | 'receipt' | 'typing' | 'unknown'
 
+export interface DataMessagePayload {
+  message?: string
+  timestamp?: number
+  groupInfo?: { groupId?: string }
+  reaction?: {
+    emoji?: string
+    targetAuthor?: string
+    targetAuthorNumber?: string
+    targetSentTimestamp?: number
+    isRemove?: boolean
+  }
+  quote?: { id?: number; author?: string; authorNumber?: string }
+  attachments?: Array<{ id?: string; contentType?: string; filename?: string; size?: number }>
+  remoteDelete?: { timestamp?: number }
+  destination?: string
+  destinationNumber?: string
+}
+
 export interface RawEnvelope {
   envelope?: {
     source?: string
     sourceUuid?: string
+    sourceNumber?: string
     sourceName?: string
     timestamp?: number
-    dataMessage?: unknown
-    syncMessage?: { sentMessage?: unknown }
-    receiptMessage?: unknown
+    dataMessage?: DataMessagePayload
+    syncMessage?: { sentMessage?: DataMessagePayload }
+    editMessage?: { targetSentTimestamp?: number; dataMessage?: { message?: string } }
+    receiptMessage?: {
+      isDelivery?: boolean
+      isRead?: boolean
+      isViewed?: boolean
+      timestamps?: number[]
+    }
     typingMessage?: unknown
   }
   account?: string
