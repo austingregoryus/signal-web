@@ -20,6 +20,17 @@ describe('classifyEnvelope', () => {
     expect(classifyEnvelope({ envelope: { typingMessage: { action: 'STARTED' } } })).toBe('typing')
   })
 
+  it('prefers sync-sent when both syncMessage.sentMessage and dataMessage are present', () => {
+    expect(
+      classifyEnvelope({
+        envelope: {
+          syncMessage: { sentMessage: { message: 'hi' } },
+          dataMessage: { message: 'hi' },
+        },
+      }),
+    ).toBe('sync-sent')
+  })
+
   it('returns unknown for an empty envelope', () => {
     expect(classifyEnvelope({})).toBe('unknown')
   })
