@@ -5,6 +5,7 @@ import { ConversationRepo } from './conversations'
 import { ReactionRepo } from './reactions'
 import { ReceiptRepo } from './receipts'
 import { AttachmentRepo } from './attachments'
+import { AuthConfigRepo } from './authConfig'
 
 export interface Store {
   db: Database.Database
@@ -13,6 +14,7 @@ export interface Store {
   reactions: ReactionRepo
   receipts: ReceiptRepo
   attachments: AttachmentRepo
+  authConfig: AuthConfigRepo
   close(): void
 }
 
@@ -35,6 +37,7 @@ export function openStore(path: string, key: string): Store {
   const reactions = new ReactionRepo(db)
   const receipts = new ReceiptRepo(db)
   const attachments = new AttachmentRepo(db)
+  const authConfig = new AuthConfigRepo(db)
 
   return {
     db,
@@ -43,6 +46,7 @@ export function openStore(path: string, key: string): Store {
     reactions,
     receipts,
     attachments,
+    authConfig,
     close: () => db.close(),
   }
 }
