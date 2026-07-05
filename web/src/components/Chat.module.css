@@ -1,0 +1,5 @@
+.layout { height: 100%; display: grid; grid-template-columns: minmax(240px, 320px) 1fr; }
+.sidebar { border-right: 1px solid #8882; overflow: hidden; display: flex; flex-direction: column; }
+.main { display: flex; flex-direction: column; min-height: 0; }
+.empty { flex: 1; display: grid; place-items: center; color: var(--muted); }
+@media (max-width: 640px) { .layout { grid-template-columns: 1fr; } }
