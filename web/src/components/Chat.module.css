@@ -38,11 +38,12 @@
   border-radius: 50%;
   background: var(--accent);
   color: #fff;
-  font-size: 1.4rem;
-  line-height: 1;
+  /* A + glyph's optical center sits a hair below its bounding-box center.
+     Match line-height to the button and nudge up 1px to balance it. */
+  font-size: 1.25rem;
+  line-height: 32px;
+  margin-top: -1px;
   cursor: pointer;
-  display: grid;
-  place-items: center;
   flex-shrink: 0;
 }
 

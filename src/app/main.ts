@@ -16,6 +16,7 @@ import { registerStaticSite } from '../api/static'
 import { AttachmentBlobStore } from '../store/attachmentsBlob'
 import { ProfileService } from '../profile/service'
 import { pruneOlderThan } from '../store/prune'
+import { reconcileConversationAliases } from '../store/reconcile'
 import fastifyWebsocket from '@fastify/websocket'
 
 const DAY = 24 * 3600_000
@@ -29,6 +30,16 @@ export async function main(): Promise<void> {
   const bridge = new LiveBridge({ store, hub, selfId })
   const blobs = new AttachmentBlobStore(config.attachmentDir, config.dbKey)
   const profile = new ProfileService({ store, client, avatarDir: config.attachmentDir })
+
+  // One-time reconciliation: fold any number-keyed conversations into their
+  // UUID-keyed canonical form (repairs duplicates from before the auto-merge
+  // existed). Idempotent — a no-op on a clean store. Non-fatal on failure.
+  try {
+    const { merged, aliased } = reconcileConversationAliases(store)
+    if (merged > 0) console.log(`[store] merged ${merged} duplicate conversation(s); ${aliased} alias(es) recorded`)
+  } catch (err) {
+    console.warn(`[store] reconcile failed: ${err instanceof Error ? err.message : String(err)}`)
+  }
 
   // Live connection state of the signal-cli receiver, surfaced on the linking page.
   const signalState = { connected: false }

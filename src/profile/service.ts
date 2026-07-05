@@ -21,6 +21,9 @@ export class ProfileService {
     for (const c of contacts) {
       const name = c.name || c.profileName
       const id = c.uuid || c.number
+      // Seed the alias table so a number-keyed conversation can later be folded
+      // into the UUID when both identifiers are present.
+      if (c.uuid && c.number) this.deps.store.conversations.linkAlias(c.number, c.uuid)
       if (name && id) {
         this.deps.store.conversations.ensure({ id, type: 'dm', displayName: name })
         named++

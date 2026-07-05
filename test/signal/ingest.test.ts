@@ -85,4 +85,25 @@ describe('ingestEnvelope', () => {
     ingestEnvelope(s, fx.inboundText, fx.SELF, 5001)
     expect(s.messages.listByConversation('alice-uuid', 10)).toHaveLength(1)
   })
+
+  it('auto-merges a number-keyed conversation into the UUID on inbound', () => {
+    // Simulate the /api/start path: a conversation keyed by phone number with an
+    // outbound message, before any UUID was known.
+    const s = open()
+    s.conversations.ensure({ id: '+15551110001', type: 'dm', displayName: 'Alice' })
+    s.messages.upsert({ conversationId: '+15551110001', authorId: fx.SELF, timestamp: 500, direction: 'out', body: 'hi', receivedAt: 1 })
+
+    // Now Alice replies. signal-cli delivers her UUID; ingest should fold the
+    // number-keyed conversation into the UUID-keyed one and link the alias.
+    ingestEnvelope(s, fx.inboundText, fx.SELF, 5000)
+
+    const convs = s.conversations.list()
+    expect(convs.map((c) => c.id)).toEqual(['alice-uuid']) // number-keyed row gone
+    expect(convs[0].displayName).toBe('Alice') // name preserved
+    // Both messages now live under the canonical uuid conversation.
+    const msgs = s.messages.listByConversation('alice-uuid', 10).map((m) => m.body).sort()
+    expect(msgs).toEqual(['hello from alice', 'hi'])
+    // Alias recorded so future number-keyed references resolve to the uuid.
+    expect(s.conversations.resolveAlias('+15551110001')).toBe('alice-uuid')
+  })
 })

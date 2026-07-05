@@ -6,7 +6,19 @@ export function ingestEnvelope(store: Store, raw: RawEnvelope, selfId: string, n
   for (const ev of parseEnvelope(raw, selfId)) {
     switch (ev.kind) {
       case 'message': {
+        // Ensure the canonical conversation exists FIRST, so mergeInto has a
+        // row to carry the obsolete conversation's display name onto.
         store.conversations.ensure({ id: ev.conversationId, type: ev.conversationType })
+        // Auto-merge: if the sender has both a UUID and a phone number, record
+        // the alias and fold any pre-existing number-keyed conversation into
+        // this UUID-keyed one. This is what keeps a /api/start-created number
+        // conversation and the contact's later inbound reply threaded together.
+        // (Only inbound DMs carry authorNumber; outbound/sync-sent and UUID-only
+        // envelopes skip this — nothing to merge against.)
+        if (ev.direction === 'in' && ev.authorNumber && ev.conversationType === 'dm') {
+          store.conversations.linkAlias(ev.authorNumber, ev.conversationId)
+          store.conversations.mergeInto(ev.conversationId, ev.authorNumber)
+        }
         store.messages.upsert({
           conversationId: ev.conversationId,
           authorId: ev.authorId,

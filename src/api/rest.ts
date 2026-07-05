@@ -55,7 +55,10 @@ export function registerRestApi(app: FastifyInstance, deps: RestDeps): void {
     '/api/send',
     auth,
     async (req, reply) => {
-      const { conversationId, type, message, base64Attachments } = req.body
+      const { type, message, base64Attachments } = req.body
+      // Resolve a number-keyed DM to its canonical UUID (in case a prior merge
+      // happened). Groups pass through unchanged — group ids are never aliased.
+      const conversationId = type === 'group' ? req.body.conversationId : store.conversations.resolveAlias(req.body.conversationId)
       // signal-cli expects un-prefixed base64; parseAttachment splits off any
       // data-URL prefix so we can also keep the content type + bytes locally.
       const parsed = (base64Attachments ?? []).map(parseAttachment)
@@ -109,12 +112,19 @@ export function registerRestApi(app: FastifyInstance, deps: RestDeps): void {
       const sent = await client.sendMessage({ recipients: [recipient], message, base64Attachments: parsed.map((p) => p.base64) })
       const ts = sent.timestamp || Date.now()
       const uuid = await client.resolveUuid?.(recipient) ?? null
-      // uuid can be null (unknown contact) but never empty — fall back to the
-      // raw number, which always makes a valid conversation id.
-      const conversationId = (uuid && uuid.length > 0 ? uuid : recipient)
+      const resolved = uuid && uuid.length > 0 ? uuid : null
+      // If signal-cli now knows this contact's UUID, link it so any future
+      // number-keyed reference resolves to the UUID. Also: if a UUID-keyed
+      // conversation for this contact already exists (e.g. they messaged first),
+      // route there instead of creating a duplicate number-keyed row.
+      if (resolved) store.conversations.linkAlias(recipient, resolved)
+      const conversationId = store.conversations.resolveAlias(resolved ?? recipient)
       if (!conversationId) {
         return reply.code(500).send({ error: 'no_conversation_id' })
       }
+      // If the user started by number but a UUID-keyed conversation already
+      // exists, fold the (possibly just-created) number row into it.
+      if (conversationId !== recipient) store.conversations.mergeInto(conversationId, recipient)
       store.conversations.ensure({ id: conversationId, type: 'dm', displayName: displayName ?? undefined })
       store.messages.upsert({
         conversationId, authorId: selfId, timestamp: ts, direction: 'out',
