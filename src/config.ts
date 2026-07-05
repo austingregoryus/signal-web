@@ -8,6 +8,7 @@ export interface AppConfig {
   dbKey: string
   publicUrl: string
   allowedOrigin: string
+  allowedOrigins: string[]
   rpId: string
   rpOrigin: string
   attachmentDir: string
@@ -38,6 +39,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     dbKey,
     publicUrl,
     allowedOrigin: env.ALLOWED_ORIGIN ?? publicUrl,
+    allowedOrigins: (env.ALLOWED_ORIGIN ?? publicUrl).split(',').map((s) => s.trim()).filter(Boolean),
     rpId: env.RP_ID ?? new URL(rpOrigin).hostname,
     rpOrigin,
     attachmentDir: env.ATTACHMENT_DIR ?? './data/attachments',

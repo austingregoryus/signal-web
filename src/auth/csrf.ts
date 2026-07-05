@@ -12,6 +12,8 @@ export function verifyCsrf(cookieToken: string | undefined, headerToken: string 
   return timingSafeEqual(a, b)
 }
 
-export function isAllowedOrigin(origin: string | undefined, allowed: string): boolean {
-  return origin === allowed
+export function isAllowedOrigin(origin: string | undefined, allowed: string | string[]): boolean {
+  if (!origin) return false
+  const list = Array.isArray(allowed) ? allowed : [allowed]
+  return list.includes(origin)
 }

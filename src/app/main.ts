@@ -73,7 +73,7 @@ export async function main(): Promise<void> {
     bootstrapToken,
   })
   await registerBrowserWs(app, {
-    store, hub, allowedOrigin: config.allowedOrigin,
+    store, hub, allowedOrigin: config.allowedOrigins,
     sessionPolicy: { ttlMs: config.sessionTtlDays * DAY, idleMs: config.sessionIdleDays * DAY },
   })
 

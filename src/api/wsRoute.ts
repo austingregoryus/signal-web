@@ -8,7 +8,7 @@ import type { SessionPolicy } from '../store/sessions'
 export interface WsDeps {
   store: Store
   hub: BrowserHub
-  allowedOrigin: string
+  allowedOrigin: string | string[]
   sessionPolicy: SessionPolicy
 }
 
