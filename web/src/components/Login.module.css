@@ -1,0 +1,7 @@
+.card { max-width: 360px; margin: 12vh auto; background: var(--panel); padding: 32px; border-radius: 16px; display: flex; flex-direction: column; gap: 12px; box-shadow: 0 8px 30px rgba(0,0,0,.08); }
+.card h1 { margin: 0; font-size: 1.4rem; }
+.sub { margin: 0 0 8px; color: var(--muted); }
+.input { padding: 12px 14px; font-size: 1rem; border-radius: 10px; border: 1px solid #8883; background: transparent; color: var(--fg); }
+.btn { padding: 12px; font-size: 1rem; font-weight: 600; border: 0; border-radius: 10px; background: var(--accent); color: #fff; cursor: pointer; }
+.error { color: #dc2626; font-size: .9rem; }
+.hint { color: var(--muted); font-size: .82rem; margin: 4px 0 0; }
