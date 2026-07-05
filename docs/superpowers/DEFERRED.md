@@ -85,3 +85,19 @@ Cross-milestone TODOs surfaced during reviews. Each names the milestone that sho
 - **Attachment blob store** derives its key as `sha256(dbKey)`; prefer HKDF with a distinct
   context string for independent key material.
 - **No test asserts** the attachment blob file is ciphertext on disk (round-trip is tested).
+
+## Added after Milestone 5 (frontend) — all Minor, deferred
+
+- **`useAuth` probe treats any error as `anon`** (incl. backend-down/500), and has a no-op
+  ternary. Should distinguish "not logged in" from "backend unreachable" (retry/error state).
+- **`Message.module.css` missing `.body`/`.edited`** classes referenced in Message.tsx →
+  `class="undefined"` (no dedicated styling for the body span / "edited" marker). Cosmetic.
+- **Typing indicator not conversation-scoped:** any `typing` poke shows "…" in whatever
+  thread is open, even if the typist is in another conversation.
+- **Stale `conv` race** in Chat.onSend could default a group to `'dm'` if the conversation
+  list is transiently empty while a selection persists (very low likelihood).
+- **Bare `FormEvent`/`KeyboardEvent`/`ChangeEvent` imports** from 'react' (React 19 prefers
+  `React.*`). Cosmetic.
+- **No outbound read receipts / typing:** `/api/read` and `/api/typing` exist on the backend
+  but the frontend doesn't call them (display-only was the planned M5 scope). Wire outbound
+  read receipts + typing when desired.
