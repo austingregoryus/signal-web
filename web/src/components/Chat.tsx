@@ -141,10 +141,13 @@ export function Chat(): React.JSX.Element {
         <NewConversation
           onClose={() => setShowNew(false)}
           onStarted={(conversationId) => {
+            // Select optimistically so the thread opens immediately, then reload
+            // the list so the new conversation sorts to the top. Selection must
+            // not depend on the reload completing (a swallowed rejection there
+            // would otherwise leave the user on "Select a conversation").
             setShowNew(false)
-            void loadConversations().then(() => {
-              setSelected(conversationId)
-            })
+            setSelected(conversationId)
+            void loadConversations()
           }}
         />
       ) : null}
