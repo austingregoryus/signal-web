@@ -5,6 +5,7 @@ import { useLiveSocket } from '../api/live'
 import { ConversationList } from './ConversationList'
 import { Thread } from './Thread'
 import { Composer } from './Composer'
+import { NewConversation } from './NewConversation'
 import { avatarColor, initials } from './avatar'
 import styles from './Chat.module.css'
 
@@ -13,6 +14,7 @@ export function Chat(): React.JSX.Element {
   const [selected, setSelected] = useState<string | null>(null)
   const [messages, setMessages] = useState<Message[]>([])
   const [typing, setTyping] = useState(false)
+  const [showNew, setShowNew] = useState(false)
   const typingTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
   const lastSeenRef = useRef(0)
 
@@ -97,6 +99,14 @@ export function Chat(): React.JSX.Element {
       <aside className={styles.sidebar}>
         <div className={styles.sidebarHeader}>
           <h1 className={styles.sidebarTitle}>Messages</h1>
+          <button
+            className={styles.newBtn}
+            onClick={() => setShowNew(true)}
+            aria-label="New conversation"
+            title="New conversation"
+          >
+            +
+          </button>
         </div>
         <ConversationList conversations={conversations} selectedId={selected} onSelect={setSelected} />
       </aside>
@@ -127,6 +137,17 @@ export function Chat(): React.JSX.Element {
           <div className={styles.empty}>Select a conversation</div>
         )}
       </main>
+      {showNew ? (
+        <NewConversation
+          onClose={() => setShowNew(false)}
+          onStarted={(conversationId) => {
+            setShowNew(false)
+            void loadConversations().then(() => {
+              setSelected(conversationId)
+            })
+          }}
+        />
+      ) : null}
     </div>
   )
 }
