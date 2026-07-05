@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { api } from '../api/client'
 import type { Conversation, Message } from '../api/types'
+import { useLiveSocket } from '../api/live'
 import { ConversationList } from './ConversationList'
 import { Thread } from './Thread'
 import { Composer } from './Composer'
@@ -21,6 +22,22 @@ export function Chat(): React.JSX.Element {
 
   useEffect(() => { void loadConversations() }, [loadConversations])
   useEffect(() => { if (selected) void loadThread(selected) }, [selected, loadThread])
+
+  useEffect(() => {
+    if ('Notification' in window && Notification.permission === 'default') {
+      void Notification.requestPermission()
+    }
+  }, [])
+
+  useLiveSocket((ev) => {
+    if (ev.type === 'message' || ev.type === 'receipt') {
+      void loadConversations()
+      if (selected) void loadThread(selected)
+      if (ev.type === 'message' && document.hidden && 'Notification' in window && Notification.permission === 'granted') {
+        new Notification('New message')
+      }
+    }
+  })
 
   const onSend = useCallback(async (text: string) => {
     if (!selected) return
