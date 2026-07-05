@@ -31,4 +31,11 @@ describe('useLiveSocket', () => {
     FakeWS.last!.onmessage?.({ data: 'ping' })
     expect(onEvent).not.toHaveBeenCalled()
   })
+
+  it('sends a cursor query param when getCursor is provided', () => {
+    vi.stubGlobal('WebSocket', FakeWS as unknown as typeof WebSocket)
+    const onEvent = vi.fn()
+    renderHook(() => useLiveSocket(onEvent, () => 42))
+    expect(FakeWS.last!.url).toContain('cursor=42')
+  })
 })

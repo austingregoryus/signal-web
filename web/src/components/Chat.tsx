@@ -13,13 +13,21 @@ export function Chat(): React.JSX.Element {
   const [messages, setMessages] = useState<Message[]>([])
   const [typing, setTyping] = useState(false)
   const typingTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
+  const lastSeenRef = useRef(0)
 
   const loadConversations = useCallback(async () => {
-    setConversations(await api.get<Conversation[]>('/api/conversations'))
+    const convs = await api.get<Conversation[]>('/api/conversations')
+    setConversations(convs)
+    for (const c of convs) {
+      if (c.lastActivity > lastSeenRef.current) lastSeenRef.current = c.lastActivity
+    }
   }, [])
   const loadThread = useCallback(async (id: string) => {
     const res = await api.get<{ messages: Message[] }>(`/api/conversations/${encodeURIComponent(id)}/messages?limit=200`)
     setMessages([...res.messages].reverse()) // API returns newest-first; show oldest-first
+    for (const m of res.messages) {
+      if (m.timestamp > lastSeenRef.current) lastSeenRef.current = m.timestamp
+    }
   }, [])
 
   useEffect(() => { void loadConversations() }, [loadConversations])
@@ -35,7 +43,13 @@ export function Chat(): React.JSX.Element {
     if (ev.type === 'message' || ev.type === 'receipt') {
       void loadConversations()
       if (selected) void loadThread(selected)
-      if (ev.type === 'message' && document.hidden && 'Notification' in window && Notification.permission === 'granted') {
+      if (
+        ev.type === 'message' &&
+        ev.message === undefined &&
+        document.hidden &&
+        'Notification' in window &&
+        Notification.permission === 'granted'
+      ) {
         new Notification('New message')
       }
     }
@@ -44,7 +58,7 @@ export function Chat(): React.JSX.Element {
       if (typingTimer.current) clearTimeout(typingTimer.current)
       typingTimer.current = setTimeout(() => setTyping(false), 4000)
     }
-  })
+  }, () => lastSeenRef.current)
 
   useEffect(() => () => { if (typingTimer.current) clearTimeout(typingTimer.current) }, [])
 

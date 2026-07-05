@@ -4,19 +4,25 @@ import styles from './Composer.module.css'
 export function Composer({
   onSend,
 }: {
-  onSend: (text: string, base64Attachments?: string[]) => void
+  onSend: (text: string, base64Attachments?: string[]) => void | Promise<void>
 }): React.JSX.Element {
   const [text, setText] = useState('')
+  const [error, setError] = useState<string | null>(null)
   const fileInputRef = useRef<HTMLInputElement | null>(null)
 
-  function send(): void {
+  async function send(): Promise<void> {
     const t = text.trim()
     if (!t) return
-    onSend(t)
-    setText('')
+    try {
+      await onSend(t)
+      setText('')
+      setError(null)
+    } catch {
+      setError("Couldn't send — try again")
+    }
   }
   function onKey(e: KeyboardEvent): void {
-    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send() }
+    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); void send() }
   }
   function onAttachClick(): void {
     fileInputRef.current?.click()
@@ -29,7 +35,14 @@ export function Composer({
       const result = reader.result
       if (typeof result === 'string') {
         const base64 = result.slice(result.indexOf(',') + 1)
-        onSend('', [base64])
+        void (async () => {
+          try {
+            await onSend('', [base64])
+            setError(null)
+          } catch {
+            setError("Couldn't send — try again")
+          }
+        })()
       }
     }
     reader.readAsDataURL(file)
@@ -49,7 +62,8 @@ export function Composer({
         className={styles.box} rows={1} placeholder="Message" aria-label="Message"
         value={text} onChange={(e) => setText(e.target.value)} onKeyDown={onKey}
       />
-      <button className={styles.send} onClick={send} aria-label="Send">➤</button>
+      <button className={styles.send} onClick={() => void send()} aria-label="Send">➤</button>
+      {error && <span role="alert" className={styles.error}>{error}</span>}
     </div>
   )
 }

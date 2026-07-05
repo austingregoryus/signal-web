@@ -22,4 +22,13 @@ describe('Composer', () => {
     await userEvent.type(box, '{Enter}')
     expect(onSend).toHaveBeenCalledWith('line\ntwo')
   })
+  it('keeps the text and shows an error when send fails', async () => {
+    const onSend = vi.fn().mockRejectedValue(new Error('network error'))
+    render(<Composer onSend={onSend} />)
+    const box = screen.getByRole('textbox')
+    await userEvent.type(box, 'hello there')
+    await userEvent.click(screen.getByRole('button', { name: /send/i }))
+    expect(box).toHaveValue('hello there')
+    expect(await screen.findByRole('alert')).toHaveTextContent(/couldn't send/i)
+  })
 })
