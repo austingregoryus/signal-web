@@ -48,10 +48,15 @@ export function Chat(): React.JSX.Element {
 
   useEffect(() => () => { if (typingTimer.current) clearTimeout(typingTimer.current) }, [])
 
-  const onSend = useCallback(async (text: string) => {
+  const onSend = useCallback(async (text: string, base64Attachments?: string[]) => {
     if (!selected) return
     const conv = conversations.find((c) => c.id === selected)
-    await api.post('/api/send', { conversationId: selected, type: conv?.type ?? 'dm', message: text })
+    await api.post('/api/send', {
+      conversationId: selected,
+      type: conv?.type ?? 'dm',
+      message: text,
+      base64Attachments,
+    })
     await loadThread(selected)
     await loadConversations()
   }, [selected, conversations, loadThread, loadConversations])

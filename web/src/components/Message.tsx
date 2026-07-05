@@ -1,5 +1,6 @@
 import type { Message as Msg } from '../api/types'
 import { Reactions } from './Reactions'
+import { Attachment } from './Attachment'
 import styles from './Message.module.css'
 
 export function Message({ m, onReact }: { m: Msg; onReact?: (emoji: string) => void }): React.JSX.Element {
@@ -13,6 +14,7 @@ export function Message({ m, onReact }: { m: Msg; onReact?: (emoji: string) => v
         ) : (
           <span className={styles.body}>{m.body}</span>
         )}
+        {m.attachments.map((a) => <Attachment key={a.id} meta={a} />)}
         <span className={styles.meta}>
           {m.editedTimestamp && !m.deleted ? <span className={styles.edited}>edited · </span> : null}
           {time}
