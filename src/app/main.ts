@@ -44,7 +44,10 @@ export async function main(): Promise<void> {
   })
   receiver.start()
 
-  const app = Fastify({ trustProxy: config.trustProxy })
+  // Attachments are sent as base64 JSON (~33% larger than the raw bytes), so the
+  // default 1 MB body limit rejects even modest photos with a 413. 25 MB lets a
+  // typical image through while staying well under signal-cli's own ceiling.
+  const app = Fastify({ trustProxy: config.trustProxy, bodyLimit: 25 * 1024 * 1024 })
   await app.register(fastifyWebsocket)
   await authPlugin(app, {
     store,
@@ -53,7 +56,7 @@ export async function main(): Promise<void> {
     webauthn: { rpId: config.rpId, rpName: 'Signal Web', origin: config.rpOrigin },
     secureCookies: config.secureCookies,
   })
-  registerRestApi(app, { store, client, selfId })
+  registerRestApi(app, { store, client, selfId, blobs })
   registerAttachmentRoute(app, { store, client, blobs })
 
   // Linking page (/link) — OFF by default; opt in with ENABLE_LINK_PAGE=true.

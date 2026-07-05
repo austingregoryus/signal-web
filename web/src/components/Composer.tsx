@@ -34,10 +34,13 @@ export function Composer({
     reader.onload = () => {
       const result = reader.result
       if (typeof result === 'string') {
-        const base64 = result.slice(result.indexOf(',') + 1)
+        // Keep the full data URL (e.g. "data:image/jpeg;base64,..."). The server
+        // splits off the content type for local storage and the bare base64 for
+        // signal-cli. Sending only the bare base64 lost the MIME type, so the
+        // sender's own copy rendered as a non-image attachment.
         void (async () => {
           try {
-            await onSend('', [base64])
+            await onSend('', [result])
             setError(null)
           } catch {
             setError("Couldn't send — try again")

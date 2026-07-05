@@ -4,12 +4,14 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { rmSync } from 'node:fs'
 import { openStore, type Store } from '../../src/store/store'
+import { AttachmentBlobStore } from '../../src/store/attachmentsBlob'
 import { hashPassword } from '../../src/auth/password'
 import { authPlugin } from '../../src/auth/plugin'
 import { registerRestApi } from '../../src/api/rest'
 
 let store: Store
 let path: string
+let blobDir: string
 let app: FastifyInstance
 const sendCalls: unknown[] = []
 const stubClient = {
@@ -22,6 +24,7 @@ const stubClient = {
 beforeEach(async () => {
   sendCalls.length = 0
   path = join(tmpdir(), `swrest-${Date.now()}-${Math.round(performance.now())}.db`)
+  blobDir = join(tmpdir(), `swrest-blobs-${Date.now()}-${Math.round(performance.now())}`)
   store = openStore(path, 'k')
   store.authConfig.setPasswordHash(await hashPassword('hunter2hunter2'))
   store.conversations.ensure({ id: 'c1', type: 'dm', displayName: 'Alice' })
@@ -34,8 +37,13 @@ beforeEach(async () => {
     webauthn: { rpId: 'localhost', rpName: 'x', origin: 'http://localhost' },
     secureCookies: false,
   })
-  registerRestApi(app, { store, client: stubClient as never, selfId: 'self' })
+  registerRestApi(app, { store, client: stubClient as never, selfId: 'self', blobs: new AttachmentBlobStore(blobDir, 'k') })
   await app.ready()
+})
+afterEach(async () => {
+  await app?.close(); store?.close()
+  try { rmSync(path) } catch { /* ignore */ }
+  try { rmSync(blobDir, { recursive: true, force: true }) } catch { /* ignore */ }
 })
 afterEach(async () => {
   await app?.close(); store?.close()
@@ -81,6 +89,25 @@ describe('REST API', () => {
     expect(sendCalls).toHaveLength(1)
     const stored = store.messages.listByConversation('c1', 10).find((m) => m.direction === 'out')
     expect(stored?.body).toBe('hello back')
+  })
+
+  it('persists sent attachments locally and forwards bare base64 to signal-cli', async () => {
+    const { session, csrf } = await login()
+    // Tiny 1x1 PNG; sent as a data URL so the server can keep the content type.
+    const png = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII='
+    const res = await app.inject({
+      method: 'POST', url: '/api/send',
+      cookies: { sw_session: session, sw_csrf: csrf }, headers: { 'x-csrf-token': csrf },
+      payload: { conversationId: 'c1', type: 'dm', message: 'look', base64Attachments: [png] },
+    })
+    expect(res.statusCode).toBe(200)
+    // signal-cli receives the bare base64 (no data: prefix).
+    expect(sendCalls[0]).toMatchObject({ base64Attachments: [png.split(',')[1]] })
+    // The sender's local copy records the attachment so it renders in their own thread.
+    const stored = store.messages.listByConversation('c1', 10).find((m) => m.direction === 'out' && m.timestamp === 111)
+    const atts = store.attachments.listForMessage(stored!.authorId, stored!.timestamp)
+    expect(atts).toHaveLength(1)
+    expect(atts[0]).toMatchObject({ contentType: 'image/png', signalId: null, size: expect.any(Number) })
   })
 
   it('enforces CSRF on send', async () => {

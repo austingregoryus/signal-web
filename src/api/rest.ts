@@ -1,5 +1,6 @@
 import type { FastifyInstance } from 'fastify'
 import type { Store } from '../store/store'
+import type { AttachmentBlobStore } from '../store/attachmentsBlob'
 
 interface SendCapableClient {
   sendMessage(input: { recipients?: string[]; groupId?: string; message?: string; base64Attachments?: string[] }): Promise<{ timestamp: number }>
@@ -12,10 +13,23 @@ export interface RestDeps {
   store: Store
   client: SendCapableClient
   selfId: string
+  blobs: AttachmentBlobStore
+}
+
+/**
+ * Parse a client-supplied attachment into its MIME type, raw base64 (for
+ * signal-cli, which wants un-prefixed base64), and decoded bytes (for local
+ * blob storage so the sender can render what they just sent). Accepts either a
+ * `data:` URL (preferred — carries the content type) or bare base64.
+ */
+function parseAttachment(input: string): { contentType: string | null; base64: string; bytes: Buffer } {
+  const m = /^data:([^;,]+)?(;base64)?,(.*)$/s.exec(input)
+  if (m) return { contentType: m[1] ?? null, base64: m[3], bytes: Buffer.from(m[3], 'base64') }
+  return { contentType: null, base64: input, bytes: Buffer.from(input, 'base64') }
 }
 
 export function registerRestApi(app: FastifyInstance, deps: RestDeps): void {
-  const { store, client, selfId } = deps
+  const { store, client, selfId, blobs } = deps
   const auth = { preHandler: app.requireAuth }
 
   app.get('/api/conversations', auth, async () => store.conversations.list())
@@ -41,10 +55,13 @@ export function registerRestApi(app: FastifyInstance, deps: RestDeps): void {
     auth,
     async (req, reply) => {
       const { conversationId, type, message, base64Attachments } = req.body
+      // signal-cli expects un-prefixed base64; parseAttachment splits off any
+      // data-URL prefix so we can also keep the content type + bytes locally.
+      const parsed = (base64Attachments ?? []).map(parseAttachment)
       const sent = await client.sendMessage(
         type === 'group'
-          ? { groupId: conversationId, message, base64Attachments }
-          : { recipients: [conversationId], message, base64Attachments },
+          ? { groupId: conversationId, message, base64Attachments: parsed.map((p) => p.base64) }
+          : { recipients: [conversationId], message, base64Attachments: parsed.map((p) => p.base64) },
       )
       const ts = sent.timestamp || Date.now()
       store.conversations.ensure({ id: conversationId, type })
@@ -52,6 +69,18 @@ export function registerRestApi(app: FastifyInstance, deps: RestDeps): void {
         conversationId, authorId: selfId, timestamp: ts, direction: 'out',
         body: message ?? null, receivedAt: Date.now(),
       })
+      // Persist each attachment locally so the sender's own view renders it.
+      // No signalId: we already have the bytes, so /api/attachments/:id serves
+      // them straight from the blob store without a signal-cli round-trip.
+      for (let i = 0; i < parsed.length; i++) {
+        const id = `${selfId}:${ts}:${i}`
+        const p = parsed[i]
+        store.attachments.add({
+          id, messageAuthorId: selfId, messageTimestamp: ts,
+          contentType: p.contentType, size: p.bytes.length, signalId: null,
+        })
+        await blobs.put(id, p.bytes)
+      }
       store.conversations.touch(conversationId, ts)
       return reply.send({ ok: true, timestamp: ts })
     },
