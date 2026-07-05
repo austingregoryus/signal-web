@@ -6,9 +6,11 @@ export default defineConfig({
   build: { outDir: 'dist' },
   server: {
     proxy: {
-      '/api': { target: 'http://localhost:8090', ws: true },
-      '/auth': 'http://localhost:8090',
-      '/link': 'http://localhost:8090',
+      // 8190 = host-published port (see docker-compose.yml). The app listens
+      // on 8090 *inside* the container; we proxy to the host-side mapping.
+      '/api': { target: 'http://localhost:8190', ws: true },
+      '/auth': 'http://localhost:8190',
+      '/link': 'http://localhost:8190',
     },
   },
   test: {
