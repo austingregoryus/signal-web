@@ -16,6 +16,15 @@ describe('NewConversation', () => {
     expect(onStarted).not.toHaveBeenCalled()
   })
 
+  it('requires a first message before submitting', async () => {
+    const onStarted = vi.fn()
+    render(<NewConversation onClose={() => {}} onStarted={onStarted} />)
+    fireEvent.change(screen.getByPlaceholderText('+15551234567'), { target: { value: '+15551234567' } })
+    fireEvent.click(screen.getByRole('button', { name: /start conversation/i }))
+    expect(await screen.findByText(/enter a first message/i)).toBeInTheDocument()
+    expect(onStarted).not.toHaveBeenCalled()
+  })
+
   it('submits to /api/start and calls onStarted with the conversation id', async () => {
     vi.spyOn(globalThis, 'fetch').mockResolvedValue(
       new Response(JSON.stringify({ conversationId: 'uuid-from-server' }), { status: 200 }),
@@ -23,6 +32,7 @@ describe('NewConversation', () => {
     const onStarted = vi.fn()
     render(<NewConversation onClose={() => {}} onStarted={onStarted} />)
     fireEvent.change(screen.getByPlaceholderText('+15551234567'), { target: { value: '+15551234567' } })
+    fireEvent.change(screen.getByPlaceholderText('Type a message…'), { target: { value: 'hello' } })
     fireEvent.click(screen.getByRole('button', { name: /start conversation/i }))
     await waitFor(() => expect(onStarted).toHaveBeenCalledWith('uuid-from-server'))
   })

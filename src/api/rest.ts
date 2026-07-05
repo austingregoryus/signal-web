@@ -100,6 +100,12 @@ export function registerRestApi(app: FastifyInstance, deps: RestDeps): void {
         return reply.code(400).send({ error: 'invalid_recipient', detail: 'E.164 phone number required, e.g. +15551234567' })
       }
       const parsed = (base64Attachments ?? []).map(parseAttachment)
+      // signal-cli rejects empty messages (no text AND no attachments) with a
+      // 400; surface that as a clear client error instead of letting it 500.
+      const hasText = typeof message === 'string' && message.trim().length > 0
+      if (!hasText && parsed.length === 0) {
+        return reply.code(400).send({ error: 'empty_message', detail: 'A first message or attachment is required' })
+      }
       const sent = await client.sendMessage({ recipients: [recipient], message, base64Attachments: parsed.map((p) => p.base64) })
       const ts = sent.timestamp || Date.now()
       const uuid = await client.resolveUuid?.(recipient) ?? null

@@ -160,4 +160,17 @@ describe('REST API', () => {
     })
     expect(res.statusCode).toBe(400)
   })
+
+  it('rejects an empty first message with no attachments (would 500 from signal-cli)', async () => {
+    const { session, csrf } = await login()
+    const res = await app.inject({
+      method: 'POST', url: '/api/start',
+      cookies: { sw_session: session, sw_csrf: csrf }, headers: { 'x-csrf-token': csrf },
+      payload: { recipient: '+15551234567' },
+    })
+    expect(res.statusCode).toBe(400)
+    expect(res.json().error).toBe('empty_message')
+    // signal-cli was never called.
+    expect(sendCalls).toHaveLength(0)
+  })
 })

@@ -48,13 +48,18 @@ export function NewConversation({
       setError('Use E.164 format, e.g. +15551234567')
       return
     }
+    const msg = message.trim()
+    if (!msg) {
+      setError('Enter a first message')
+      return
+    }
     setSending(true)
     setError(null)
     try {
       const res = await api.post<StartResult>('/api/start', {
         recipient: r,
         displayName: displayName.trim() || undefined,
-        message: message.trim() || undefined,
+        message: msg,
       })
       onStarted(res.conversationId)
     } catch (err) {
@@ -96,7 +101,7 @@ export function NewConversation({
             />
           </label>
           <label className={styles.field}>
-            <span className={styles.label}>First message (optional)</span>
+            <span className={styles.label}>First message</span>
             <textarea
               className={styles.input}
               rows={2}
