@@ -5,6 +5,7 @@ import { useLiveSocket } from '../api/live'
 import { ConversationList } from './ConversationList'
 import { Thread } from './Thread'
 import { Composer } from './Composer'
+import { avatarColor, initials } from './avatar'
 import styles from './Chat.module.css'
 
 export function Chat(): React.JSX.Element {
@@ -88,14 +89,37 @@ export function Chat(): React.JSX.Element {
     await loadThread(selected)
   }, [selected, conversations, loadThread])
 
+  const selectedConv = conversations.find((c) => c.id === selected) ?? null
+  const showThreadOnMobile = Boolean(selected)
+
   return (
-    <div className={styles.layout}>
+    <div className={`${styles.layout} ${showThreadOnMobile ? styles.threadActive : ''}`}>
       <aside className={styles.sidebar}>
+        <div className={styles.sidebarHeader}>
+          <h1 className={styles.sidebarTitle}>Messages</h1>
+        </div>
         <ConversationList conversations={conversations} selectedId={selected} onSelect={setSelected} />
       </aside>
       <main className={styles.main}>
         {selected ? (
           <>
+            <div className={styles.threadHeader}>
+              <button
+                className={styles.backBtn}
+                onClick={() => setSelected(null)}
+                aria-label="Back to conversations"
+              >
+                ‹
+              </button>
+              <span
+                className={styles.threadAvatar}
+                style={{ background: avatarColor(selectedConv?.id ?? selected) }}
+                aria-hidden
+              >
+                {initials(selectedConv?.displayName ?? null)}
+              </span>
+              <span className={styles.threadName}>{selectedConv?.displayName ?? selectedConv?.id ?? selected}</span>
+            </div>
             <Thread messages={messages} onReact={onReact} typing={typing} />
             <Composer onSend={onSend} />
           </>

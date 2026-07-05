@@ -1,4 +1,79 @@
-.wrap { display: flex; gap: 4px; align-items: center; margin-top: 4px; position: relative; }
-.chip, .add { border: 0; border-radius: 10px; background: #8883; padding: 1px 7px; font-size: .8rem; cursor: pointer; color: inherit; }
-.picker { position: absolute; bottom: 100%; left: 0; display: flex; gap: 2px; background: var(--panel); border: 1px solid #8883; border-radius: 10px; padding: 4px; z-index: 5; }
-.picker button { border: 0; background: transparent; font-size: 1.1rem; cursor: pointer; }
+.wrap {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+  margin-top: 4px;
+  position: relative;
+  flex-wrap: wrap;
+}
+
+.chip, .add {
+  border: 0;
+  border-radius: 10px;
+  background: var(--hover-tint);
+  border: 1px solid var(--border);
+  padding: 2px 8px;
+  font-size: .78rem;
+  cursor: pointer;
+  color: inherit;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .chip, .add { transition: background-color 150ms ease, transform 150ms ease; }
+}
+
+.chip:hover, .add:hover { background: var(--active-tint); }
+
+.picker {
+  position: absolute;
+  bottom: 100%;
+  margin-bottom: 6px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px;
+  max-width: min(260px, calc(100vw - 32px));
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 6px;
+  box-shadow: var(--shadow-lg);
+  z-index: 5;
+  transform-origin: bottom;
+}
+
+/* Inbound (align start): open toward the right, anchored at the left edge. */
+.pickerStart { left: 0; }
+
+/* Outbound (align end): open toward the left, anchored at the right edge
+   so the picker never overflows off the right side of the viewport. */
+.pickerEnd { right: 0; }
+
+@media (prefers-reduced-motion: no-preference) {
+  .picker {
+    animation: pop-in 150ms ease;
+  }
+}
+
+@keyframes pop-in {
+  from { opacity: 0; transform: scale(.92) translateY(4px); }
+  to { opacity: 1; transform: scale(1) translateY(0); }
+}
+
+.pickerBtn {
+  border: 0;
+  background: transparent;
+  font-size: 1.3rem;
+  line-height: 1;
+  cursor: pointer;
+  min-width: 32px;
+  min-height: 32px;
+  display: grid;
+  place-items: center;
+  border-radius: 8px;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .pickerBtn { transition: background-color 150ms ease; }
+}
+
+.pickerBtn:hover { background: var(--hover-tint); }

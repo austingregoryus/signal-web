@@ -3,11 +3,13 @@ import { Reactions } from './Reactions'
 import { Attachment } from './Attachment'
 import styles from './Message.module.css'
 
-export function Message({ m, onReact }: { m: Msg; onReact?: (emoji: string) => void }): React.JSX.Element {
+export function Message({
+  m, onReact, compact,
+}: { m: Msg; onReact?: (emoji: string) => void; compact?: boolean }): React.JSX.Element {
   const time = new Date(m.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
   const isRead = m.direction === 'out' && m.receipts.some((r) => r.type === 'read')
   return (
-    <div className={`${styles.row} ${m.direction === 'out' ? styles.out : styles.in}`}>
+    <div className={`${styles.row} ${m.direction === 'out' ? styles.out : styles.in} ${compact ? styles.compact : ''}`}>
       <div className={styles.bubble}>
         {m.deleted ? (
           <em className={styles.deleted}>This message was deleted</em>
@@ -20,7 +22,9 @@ export function Message({ m, onReact }: { m: Msg; onReact?: (emoji: string) => v
           {time}
           {isRead ? <span className={styles.read}> · ✓✓ Read</span> : null}
         </span>
-        {onReact ? <Reactions reactions={m.reactions} onReact={onReact} /> : null}
+        {onReact ? (
+          <Reactions reactions={m.reactions} onReact={onReact} align={m.direction === 'out' ? 'end' : 'start'} />
+        ) : null}
       </div>
     </div>
   )

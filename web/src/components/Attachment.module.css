@@ -1,2 +1,2 @@
-.image { max-width: 260px; max-height: 260px; border-radius: 10px; display: block; margin-top: 4px; }
-.file { display: inline-block; margin-top: 4px; color: var(--accent); text-decoration: underline; }
+.image { max-width: 260px; max-height: 260px; border-radius: 12px; display: block; margin-top: 6px; box-shadow: var(--shadow-sm); }
+.file { display: inline-block; margin-top: 6px; color: var(--accent); text-decoration: underline; font-size: .9rem; }
