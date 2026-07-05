@@ -12,6 +12,7 @@ import { registerRestApi } from '../api/rest'
 import { registerBrowserWs } from '../api/wsRoute'
 import { registerAttachmentRoute } from '../api/attachments'
 import { registerLinkRoute } from '../api/linkRoute'
+import { registerStaticSite } from '../api/static'
 import { AttachmentBlobStore } from '../store/attachmentsBlob'
 import { ProfileService } from '../profile/service'
 import { pruneOlderThan } from '../store/prune'
@@ -80,6 +81,13 @@ export async function main(): Promise<void> {
   setInterval(() => { void profile.refresh() }, 10 * 60_000).unref()
   setInterval(() => { pruneOlderThan(store, Date.now()) }, 60 * 60_000).unref()
   void profile.refresh()
+
+  const webDir = process.env.WEB_DIR ?? './web/dist'
+  try {
+    await registerStaticSite(app, { dir: webDir })
+  } catch (err) {
+    console.warn(`[app] static site not served (${err instanceof Error ? err.message : String(err)})`)
+  }
 
   await app.listen({ port: config.port, host: '0.0.0.0' })
   console.log(`[app] listening on :${config.port}`)

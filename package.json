@@ -12,10 +12,12 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "link-device": "tsx src/signal/link.ts",
-    "set-password": "tsx src/setPassword.ts"
+    "set-password": "tsx src/setPassword.ts",
+    "build:web": "npm --prefix web install && npm --prefix web run build"
   },
   "dependencies": {
     "@fastify/cookie": "^11.0.2",
+    "@fastify/static": "^9.1.3",
     "@fastify/websocket": "^11.2.0",
     "@node-rs/argon2": "^2.0.2",
     "@simplewebauthn/server": "^13.3.2",
