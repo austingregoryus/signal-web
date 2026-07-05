@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { api } from '../api/client'
 import type { Conversation, Message } from '../api/types'
 import { useLiveSocket } from '../api/live'
@@ -11,6 +11,8 @@ export function Chat(): React.JSX.Element {
   const [conversations, setConversations] = useState<Conversation[]>([])
   const [selected, setSelected] = useState<string | null>(null)
   const [messages, setMessages] = useState<Message[]>([])
+  const [typing, setTyping] = useState(false)
+  const typingTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
 
   const loadConversations = useCallback(async () => {
     setConversations(await api.get<Conversation[]>('/api/conversations'))
@@ -37,7 +39,14 @@ export function Chat(): React.JSX.Element {
         new Notification('New message')
       }
     }
+    if (ev.type === 'typing') {
+      setTyping(true)
+      if (typingTimer.current) clearTimeout(typingTimer.current)
+      typingTimer.current = setTimeout(() => setTyping(false), 4000)
+    }
   })
+
+  useEffect(() => () => { if (typingTimer.current) clearTimeout(typingTimer.current) }, [])
 
   const onSend = useCallback(async (text: string) => {
     if (!selected) return
@@ -47,6 +56,19 @@ export function Chat(): React.JSX.Element {
     await loadConversations()
   }, [selected, conversations, loadThread, loadConversations])
 
+  const onReact = useCallback(async (m: Message, emoji: string) => {
+    if (!selected) return
+    const conv = conversations.find((c) => c.id === selected)
+    await api.post('/api/react', {
+      conversationId: selected,
+      type: conv?.type ?? 'dm',
+      targetAuthorId: m.authorId,
+      targetTimestamp: m.timestamp,
+      emoji,
+    })
+    await loadThread(selected)
+  }, [selected, conversations, loadThread])
+
   return (
     <div className={styles.layout}>
       <aside className={styles.sidebar}>
@@ -55,7 +77,7 @@ export function Chat(): React.JSX.Element {
       <main className={styles.main}>
         {selected ? (
           <>
-            <Thread messages={messages} />
+            <Thread messages={messages} onReact={onReact} typing={typing} />
             <Composer onSend={onSend} />
           </>
         ) : (

@@ -5,3 +5,4 @@
 .out .bubble { background: var(--accent); color: #fff; }
 .meta { display: block; font-size: .7rem; opacity: .7; margin-top: 4px; text-align: right; }
 .deleted { opacity: .6; }
+.read { opacity: .9; }
