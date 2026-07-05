@@ -1,0 +1,2 @@
+.image { max-width: 260px; max-height: 260px; border-radius: 10px; display: block; margin-top: 4px; }
+.file { display: inline-block; margin-top: 4px; color: var(--accent); text-decoration: underline; }

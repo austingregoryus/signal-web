@@ -1,0 +1,4 @@
+.wrap { display: flex; gap: 4px; align-items: center; margin-top: 4px; position: relative; }
+.chip, .add { border: 0; border-radius: 10px; background: #8883; padding: 1px 7px; font-size: .8rem; cursor: pointer; color: inherit; }
+.picker { position: absolute; bottom: 100%; left: 0; display: flex; gap: 2px; background: var(--panel); border: 1px solid #8883; border-radius: 10px; padding: 4px; z-index: 5; }
+.picker button { border: 0; background: transparent; font-size: 1.1rem; cursor: pointer; }

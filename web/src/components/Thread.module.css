@@ -1,0 +1,3 @@
+.thread { flex: 1; overflow-y: auto; padding: 12px 0; display: flex; flex-direction: column; }
+.typingRow { display: flex; margin: 6px 12px; }
+.typingBubble { padding: 8px 12px; border-radius: 14px; background: #8882; opacity: .7; }

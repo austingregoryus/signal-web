@@ -1,0 +1,6 @@
+:root { color-scheme: light dark; --accent: #2563eb; --bg: #f6f7f9; --fg: #14171a; --panel: #fff; --muted: #667; }
+@media (prefers-color-scheme: dark) { :root { --bg: #0f1115; --fg: #e7e9ea; --panel: #181b21; --muted: #9aa4b2; } }
+* { box-sizing: border-box; }
+html, body, #root { height: 100%; margin: 0; }
+body { font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif; font-size: 16px; background: var(--bg); color: var(--fg); }
+.app-shell { height: 100%; display: grid; place-items: center; }
