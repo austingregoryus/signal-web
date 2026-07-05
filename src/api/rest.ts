@@ -109,7 +109,12 @@ export function registerRestApi(app: FastifyInstance, deps: RestDeps): void {
       const sent = await client.sendMessage({ recipients: [recipient], message, base64Attachments: parsed.map((p) => p.base64) })
       const ts = sent.timestamp || Date.now()
       const uuid = await client.resolveUuid?.(recipient) ?? null
-      const conversationId = uuid ?? recipient
+      // uuid can be null (unknown contact) but never empty — fall back to the
+      // raw number, which always makes a valid conversation id.
+      const conversationId = (uuid && uuid.length > 0 ? uuid : recipient)
+      if (!conversationId) {
+        return reply.code(500).send({ error: 'no_conversation_id' })
+      }
       store.conversations.ensure({ id: conversationId, type: 'dm', displayName: displayName ?? undefined })
       store.messages.upsert({
         conversationId, authorId: selfId, timestamp: ts, direction: 'out',

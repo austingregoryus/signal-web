@@ -151,6 +151,23 @@ describe('REST API', () => {
     expect(store.conversations.list().some((c) => c.id === '+15557654321')).toBe(true)
   })
 
+  it('falls back to the phone number when the contact exists but has no UUID', async () => {
+    // signal-cli can return a contact with an empty uuid (unregistered number);
+    // that must not produce a conversation with an empty id.
+    const { session, csrf } = await login()
+    uuidByNumber['+15559990000'] = ''
+    const res = await app.inject({
+      method: 'POST', url: '/api/start',
+      cookies: { sw_session: session, sw_csrf: csrf }, headers: { 'x-csrf-token': csrf },
+      payload: { recipient: '+15559990000', message: 'hello' },
+    })
+    expect(res.statusCode).toBe(200)
+    expect(res.json().conversationId).toBe('+15559990000')
+    const ids = store.conversations.list().map((c) => c.id)
+    expect(ids).not.toContain('')
+    expect(ids).toContain('+15559990000')
+  })
+
   it('rejects an invalid recipient number', async () => {
     const { session, csrf } = await login()
     const res = await app.inject({

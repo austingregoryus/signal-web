@@ -115,7 +115,12 @@ export class SignalClient {
     try {
       const contacts = await this.listContacts()
       const hit = contacts.find((c) => c.number === number)
-      return hit?.uuid ?? null
+      // signal-cli can return a contact entry with an empty/absent uuid when
+      // the number isn't registered yet — treat that as "not resolved" so the
+      // caller falls back to the raw number instead of creating a conversation
+      // with an empty id.
+      const uuid = hit?.uuid
+      return uuid && uuid.length > 0 ? uuid : null
     } catch {
       return null
     }
