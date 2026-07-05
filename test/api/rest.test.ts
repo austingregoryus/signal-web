@@ -14,15 +14,18 @@ let path: string
 let blobDir: string
 let app: FastifyInstance
 const sendCalls: unknown[] = []
+const uuidByNumber: Record<string, string> = {}
 const stubClient = {
   sendMessage: async (i: unknown) => { sendCalls.push(i); return { timestamp: 111 } },
   sendReaction: async () => {},
   sendTyping: async () => {},
   sendReceipt: async () => {},
+  resolveUuid: async (number: string) => uuidByNumber[number] ?? null,
 }
 
 beforeEach(async () => {
   sendCalls.length = 0
+  for (const k of Object.keys(uuidByNumber)) delete uuidByNumber[k]
   path = join(tmpdir(), `swrest-${Date.now()}-${Math.round(performance.now())}.db`)
   blobDir = join(tmpdir(), `swrest-blobs-${Date.now()}-${Math.round(performance.now())}`)
   store = openStore(path, 'k')
@@ -117,5 +120,44 @@ describe('REST API', () => {
       payload: { conversationId: 'c1', type: 'dm', message: 'x' },
     })
     expect(res.statusCode).toBe(403)
+  })
+
+  it('starts a new conversation, preferring the resolved UUID as the conversation id', async () => {
+    const { session, csrf } = await login()
+    uuidByNumber['+15551234567'] = 'uuid-abc'
+    const res = await app.inject({
+      method: 'POST', url: '/api/start',
+      cookies: { sw_session: session, sw_csrf: csrf }, headers: { 'x-csrf-token': csrf },
+      payload: { recipient: '+15551234567', displayName: 'Bob', message: 'hi there' },
+    })
+    expect(res.statusCode).toBe(200)
+    // Sent via signal-cli to the raw number (signal-cli resolves it itself).
+    expect(sendCalls[0]).toMatchObject({ recipients: ['+15551234567'], message: 'hi there' })
+    // Conversation is keyed by the UUID so inbound replies thread correctly.
+    const conv = store.conversations.list().find((c) => c.id === 'uuid-abc')
+    expect(conv).toMatchObject({ id: 'uuid-abc', type: 'dm', displayName: 'Bob' })
+    expect(res.json().conversationId).toBe('uuid-abc')
+  })
+
+  it('falls back to the phone number when the recipient is not a known contact', async () => {
+    const { session, csrf } = await login()
+    const res = await app.inject({
+      method: 'POST', url: '/api/start',
+      cookies: { sw_session: session, sw_csrf: csrf }, headers: { 'x-csrf-token': csrf },
+      payload: { recipient: '+15557654321', message: 'hello' },
+    })
+    expect(res.statusCode).toBe(200)
+    expect(res.json().conversationId).toBe('+15557654321')
+    expect(store.conversations.list().some((c) => c.id === '+15557654321')).toBe(true)
+  })
+
+  it('rejects an invalid recipient number', async () => {
+    const { session, csrf } = await login()
+    const res = await app.inject({
+      method: 'POST', url: '/api/start',
+      cookies: { sw_session: session, sw_csrf: csrf }, headers: { 'x-csrf-token': csrf },
+      payload: { recipient: 'not-a-number', message: 'hi' },
+    })
+    expect(res.statusCode).toBe(400)
   })
 })

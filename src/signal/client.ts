@@ -103,6 +103,24 @@ export class SignalClient {
     return (await res.json()) as Contact[]
   }
 
+  /**
+   * Resolve a phone number to its Signal UUID. Conversation ids are UUID-based
+   * for inbound messages (signal-cli always supplies sourceUuid), so starting
+   * a new conversation by UUID — rather than the raw number — keeps the user's
+   * outgoing thread and the contact's later replies under one conversation.
+   * Returns null if the number isn't a known contact (caller falls back to the
+   * number itself).
+   */
+  async resolveUuid(number: string): Promise<string | null> {
+    try {
+      const contacts = await this.listContacts()
+      const hit = contacts.find((c) => c.number === number)
+      return hit?.uuid ?? null
+    } catch {
+      return null
+    }
+  }
+
   async listGroups(): Promise<Array<{ id: string; name?: string }>> {
     const res = await this.fetchImpl(this.url(`/v1/groups/${encodeURIComponent(this.opts.number)}`))
     if (!res.ok) throw new Error(`groups failed: ${res.status}`)

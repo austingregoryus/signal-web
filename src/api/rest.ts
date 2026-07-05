@@ -7,6 +7,7 @@ interface SendCapableClient {
   sendReaction(input: { recipient?: string; groupId?: string; reaction: string; targetAuthor: string; targetTimestamp: number; remove?: boolean }): Promise<void>
   sendTyping(input: { recipient?: string; groupId?: string; stop?: boolean }): Promise<void>
   sendReceipt(input: { recipient: string; targetTimestamp: number; type: 'read' | 'viewed' }): Promise<void>
+  resolveUuid?(number: string): Promise<string | null>
 }
 
 export interface RestDeps {
@@ -83,6 +84,42 @@ export function registerRestApi(app: FastifyInstance, deps: RestDeps): void {
       }
       store.conversations.touch(conversationId, ts)
       return reply.send({ ok: true, timestamp: ts })
+    },
+  )
+
+  // Start a brand-new DM with a phone number the user hasn't talked to yet.
+  // Conversation ids are UUID-based for inbound, so prefer resolving the
+  // recipient's UUID (keeps this thread and their replies together); fall back
+  // to the raw number if they aren't a known signal-cli contact yet.
+  app.post<{ Body: { recipient: string; displayName?: string; message?: string; base64Attachments?: string[] } }>(
+    '/api/start',
+    auth,
+    async (req, reply) => {
+      const { recipient, displayName, message, base64Attachments } = req.body
+      if (!recipient || !/^\+[1-9]\d{6,14}$/.test(recipient)) {
+        return reply.code(400).send({ error: 'invalid_recipient', detail: 'E.164 phone number required, e.g. +15551234567' })
+      }
+      const parsed = (base64Attachments ?? []).map(parseAttachment)
+      const sent = await client.sendMessage({ recipients: [recipient], message, base64Attachments: parsed.map((p) => p.base64) })
+      const ts = sent.timestamp || Date.now()
+      const uuid = await client.resolveUuid?.(recipient) ?? null
+      const conversationId = uuid ?? recipient
+      store.conversations.ensure({ id: conversationId, type: 'dm', displayName: displayName ?? undefined })
+      store.messages.upsert({
+        conversationId, authorId: selfId, timestamp: ts, direction: 'out',
+        body: message ?? null, receivedAt: Date.now(),
+      })
+      for (let i = 0; i < parsed.length; i++) {
+        const id = `${selfId}:${ts}:${i}`
+        const p = parsed[i]
+        store.attachments.add({
+          id, messageAuthorId: selfId, messageTimestamp: ts,
+          contentType: p.contentType, size: p.bytes.length, signalId: null,
+        })
+        await blobs.put(id, p.bytes)
+      }
+      store.conversations.touch(conversationId, ts)
+      return reply.send({ ok: true, conversationId, timestamp: ts })
     },
   )
 
