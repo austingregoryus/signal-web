@@ -33,7 +33,7 @@
   box-shadow: 0 0 0 3px var(--active-tint);
 }
 
-.send, .attach {
+.send, .attach, .emoji {
   border: 0;
   border-radius: 50%;
   width: 40px;
@@ -46,15 +46,15 @@
 }
 
 @media (prefers-reduced-motion: no-preference) {
-  .send, .attach { transition: background-color 150ms ease, transform 150ms ease; }
+  .send, .attach, .emoji { transition: background-color 150ms ease, transform 150ms ease; }
 }
 
 .send { background: var(--accent); color: #fff; }
 .send:hover { background: var(--accent-hover); }
 .send:active { transform: scale(.94); }
 
-.attach { background: var(--hover-tint); color: var(--fg); }
-.attach:hover { background: var(--active-tint); }
+.attach, .emoji { background: var(--hover-tint); color: var(--fg); }
+.attach:hover, .emoji:hover { background: var(--active-tint); }
 
 .fileInput { display: none; }
 

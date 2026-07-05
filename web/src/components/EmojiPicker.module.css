@@ -1,0 +1,128 @@
+/* Click-outside catcher that sits behind the picker but above the page. */
+.overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 800;
+  background: transparent;
+}
+
+.picker {
+  position: absolute;
+  bottom: 64px; /* sits above the composer bar */
+  left: 16px;
+  width: min(340px, calc(100vw - 32px));
+  max-height: 320px;
+  display: flex;
+  flex-direction: column;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 18px;
+  box-shadow: var(--shadow-lg);
+  overflow: hidden;
+  animation: ep-pop 150ms ease;
+  transform-origin: bottom left;
+}
+
+@keyframes ep-pop {
+  from { opacity: 0; transform: scale(.94) translateY(6px); }
+  to { opacity: 1; transform: scale(1) translateY(0); }
+}
+
+.search {
+  margin: 10px;
+  padding: 9px 14px;
+  font: inherit;
+  font-size: .92rem;
+  border-radius: 10px;
+  border: 1px solid var(--border-strong);
+  background: var(--bg);
+  color: var(--fg);
+  outline: none;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .search { transition: box-shadow 150ms ease, border-color 150ms ease; }
+}
+
+.search:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--active-tint);
+}
+
+.grid {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(38px, 1fr));
+  gap: 2px;
+  padding: 4px 8px 8px;
+}
+
+.btn {
+  border: 0;
+  background: transparent;
+  font-size: 1.5rem;
+  line-height: 1;
+  cursor: pointer;
+  min-width: 38px;
+  min-height: 38px;
+  display: grid;
+  place-items: center;
+  border-radius: 9px;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .btn { transition: background-color 120ms ease, transform 120ms ease; }
+}
+
+.btn:hover { background: var(--hover-tint); }
+.btn:active { transform: scale(.9); }
+
+.empty {
+  grid-column: 1 / -1;
+  text-align: center;
+  color: var(--muted);
+  font-size: .9rem;
+  padding: 24px 0;
+}
+
+.tabs {
+  display: flex;
+  gap: 2px;
+  padding: 6px 8px;
+  border-top: 1px solid var(--border);
+  overflow-x: auto;
+  scrollbar-width: thin;
+}
+
+.tab {
+  border: 0;
+  background: transparent;
+  font-size: 1.15rem;
+  line-height: 1;
+  cursor: pointer;
+  min-width: 36px;
+  height: 34px;
+  display: grid;
+  place-items: center;
+  border-radius: 8px;
+  flex-shrink: 0;
+  opacity: .55;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .tab { transition: background-color 120ms ease, opacity 120ms ease; }
+}
+
+.tab:hover { background: var(--hover-tint); opacity: 1; }
+.tabActive { opacity: 1; background: var(--active-tint); }
+
+@media (max-width: 640px) {
+  .picker {
+    left: 8px;
+    right: 8px;
+    width: auto;
+    max-height: 50vh;
+  }
+}

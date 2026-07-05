@@ -1,4 +1,5 @@
 import { useRef, useState, type ChangeEvent, type KeyboardEvent } from 'react'
+import { EmojiPicker } from './EmojiPicker'
 import styles from './Composer.module.css'
 
 export function Composer({
@@ -8,7 +9,9 @@ export function Composer({
 }): React.JSX.Element {
   const [text, setText] = useState('')
   const [error, setError] = useState<string | null>(null)
+  const [showEmoji, setShowEmoji] = useState(false)
   const fileInputRef = useRef<HTMLInputElement | null>(null)
+  const textareaRef = useRef<HTMLTextAreaElement | null>(null)
 
   async function send(): Promise<void> {
     const t = text.trim()
@@ -26,6 +29,20 @@ export function Composer({
   }
   function onAttachClick(): void {
     fileInputRef.current?.click()
+  }
+  function onEmoji(emoji: string): void {
+    // Insert at the cursor; keep focus in the textarea so the user can keep typing.
+    const ta = textareaRef.current
+    if (!ta) { setText((t) => t + emoji); return }
+    const start = ta.selectionStart ?? text.length
+    const end = ta.selectionEnd ?? text.length
+    const next = text.slice(0, start) + emoji + text.slice(end)
+    setText(next)
+    requestAnimationFrame(() => {
+      const pos = start + emoji.length
+      ta.focus()
+      ta.setSelectionRange(pos, pos)
+    })
   }
   function onFileChange(e: ChangeEvent<HTMLInputElement>): void {
     const file = e.target.files?.[0]
@@ -61,12 +78,25 @@ export function Composer({
         aria-label="Attachment file"
         onChange={onFileChange}
       />
+      <button
+        className={styles.emoji}
+        onClick={() => setShowEmoji((s) => !s)}
+        aria-label="Emoji"
+        aria-expanded={showEmoji}
+        title="Emoji"
+      >
+        😊
+      </button>
       <textarea
+        ref={textareaRef}
         className={styles.box} rows={1} placeholder="Message" aria-label="Message"
         value={text} onChange={(e) => setText(e.target.value)} onKeyDown={onKey}
       />
       <button className={styles.send} onClick={() => void send()} aria-label="Send">➤</button>
       {error && <span role="alert" className={styles.error}>{error}</span>}
+      {showEmoji ? (
+        <EmojiPicker onPick={onEmoji} onClose={() => setShowEmoji(false)} />
+      ) : null}
     </div>
   )
 }
