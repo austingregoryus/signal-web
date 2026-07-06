@@ -17,7 +17,7 @@ export function Chat(): React.JSX.Element {
   const [conversations, setConversations] = useState<Conversation[]>([])
   const [selected, setSelected] = useState<string | null>(null)
   const [messages, setMessages] = useState<Message[]>([])
-  const [typing, setTyping] = useState(false)
+  const [typing, setTyping] = useState<string | null>(null) // sender name or null
   const [showNew, setShowNew] = useState(false)
   const [replyTo, setReplyTo] = useState<Message | null>(null)
   const [editing, setEditing] = useState<Message | null>(null)
@@ -131,18 +131,25 @@ export function Chat(): React.JSX.Element {
       if (current && (targetId === null || targetId === current)) void refreshTail(current)
       if (
         ev.type === 'message' &&
-        ev.message === undefined &&
         document.hidden &&
         'Notification' in window &&
         Notification.permission === 'granted'
       ) {
-        new Notification('New message')
+        // Richer body: "Sender: preview" (like Signal itself shows).
+        const sender = typeof ev.sender === 'string' && ev.sender ? ev.sender : 'New message'
+        const preview = typeof ev.preview === 'string' && ev.preview ? ev.preview : ''
+        const title = preview ? sender : 'New message'
+        const body = preview || (sender !== 'New message' ? sender : undefined)
+        new Notification(title, body ? { body } : undefined)
       }
     }
     if (ev.type === 'typing') {
-      setTyping(true)
+      // Resolve the typing sender's name; null falls back to a generic indicator.
+      const source = typeof ev.source === 'string' ? ev.source : null
+      const name = source ? (resolveName(source, source) ?? source) : null
+      setTyping(name)
       if (typingTimer.current) clearTimeout(typingTimer.current)
-      typingTimer.current = setTimeout(() => setTyping(false), 4000)
+      typingTimer.current = setTimeout(() => setTyping(null), 4000)
     }
   }, () => lastSeenRef.current)
 

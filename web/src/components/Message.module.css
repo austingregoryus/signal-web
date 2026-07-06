@@ -69,7 +69,8 @@
 
 .edited { opacity: .85; font-style: italic; }
 .deleted { opacity: .6; font-style: italic; }
-.read { opacity: .9; }
+.tick { opacity: .6; }
+.read { opacity: .9; color: #3b82f6; }
 
 /* Quoted-message preview rendered at the top of a reply bubble. */
 .quote {

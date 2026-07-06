@@ -2,12 +2,6 @@
 
 Cross-milestone TODOs surfaced during reviews. Each names the milestone that should resolve it.
 
-## For Milestone 4 (web API / live sync wiring)
-- **Synced own-device edits.** signal-cli delivers edits made from the phone as
-  `syncMessage.sentMessage.editMessage`, but `parseEnvelope` currently only handles
-  top-level `envelope.editMessage`. Own-device edits won't apply until the sync path is
-  modeled. (M2 T6 review.)
-
 ## For Milestone 6 (deploy hardening)
 - **Native prebuild in Docker/CI.** The dev box's global `~/.npmrc` has
   `ignore-scripts=true`, which skips `better-sqlite3-multiple-ciphers`' prebuilt-binary

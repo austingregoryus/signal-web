@@ -19,7 +19,14 @@ export function Message({
   resolveName?: (authorId: string, authorNumber: string | null) => string | null
 }): React.JSX.Element {
   const time = new Date(m.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-  const isRead = m.direction === 'out' && m.receipts.some((r) => r.type === 'read')
+  // Outgoing receipt state, in increasing significance: sent < delivered < read.
+  const receiptState = m.direction === 'out'
+    ? m.receipts.some((r) => r.type === 'read' || r.type === 'viewed')
+      ? 'read'
+      : m.receipts.some((r) => r.type === 'delivery')
+        ? 'delivered'
+        : 'sent'
+    : 'none'
   const quoted = m.quoteAuthorId != null && m.quoteTimestamp != null
     ? quoteOf?.(m.quoteAuthorId, m.quoteTimestamp)
     : undefined
@@ -49,7 +56,9 @@ export function Message({
         <span className={styles.meta}>
           {m.editedTimestamp && !m.deleted ? <span className={styles.edited}>edited · </span> : null}
           {time}
-          {isRead ? <span className={styles.read}> · ✓✓ Read</span> : null}
+          {receiptState === 'sent' ? <span className={styles.tick}> · ✓</span> : null}
+          {receiptState === 'delivered' ? <span className={styles.tick}> · ✓✓</span> : null}
+          {receiptState === 'read' ? <span className={styles.read}> · ✓✓</span> : null}
         </span>
         {onReact ? (
           <Reactions reactions={m.reactions} onReact={onReact} align={m.direction === 'out' ? 'end' : 'start'} />

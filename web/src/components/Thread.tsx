@@ -15,7 +15,8 @@ export function Thread({
   hasMore?: boolean
   loadingMore?: boolean
   onLoadMore?: (beforeTimestamp: number) => void | Promise<unknown>
-  typing?: boolean
+  /** Typing indicator: a sender name (string), true (generic), or null. */
+  typing?: string | null
   /** Group context — show sender labels on inbound messages. */
   isGroup?: boolean
   /** Resolve an author id/number to a display name (for group sender labels). */
@@ -106,7 +107,9 @@ export function Thread({
       })}
       {typing ? (
         <div className={styles.typingRow}>
-          <div className={styles.typingBubble}>…</div>
+          <div className={styles.typingBubble}>
+            {typeof typing === 'string' ? `${typing} is typing…` : '…'}
+          </div>
         </div>
       ) : null}
       <div ref={(el) => { /* bottom anchor; not strictly needed since we scroll the container */ if (!el) return }} />
