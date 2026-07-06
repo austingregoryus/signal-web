@@ -10,7 +10,7 @@ describe('Composer', () => {
     const box = screen.getByRole('textbox')
     await userEvent.type(box, 'hello there')
     await userEvent.click(screen.getByRole('button', { name: /send/i }))
-    expect(onSend).toHaveBeenCalledWith('hello there')
+    expect(onSend).toHaveBeenCalledWith('hello there', undefined, undefined)
     expect(box).toHaveValue('')
   })
   it('sends on Enter but not Shift+Enter', async () => {
@@ -20,7 +20,7 @@ describe('Composer', () => {
     await userEvent.type(box, 'line{Shift>}{Enter}{/Shift}two')
     expect(onSend).not.toHaveBeenCalled()
     await userEvent.type(box, '{Enter}')
-    expect(onSend).toHaveBeenCalledWith('line\ntwo')
+    expect(onSend).toHaveBeenCalledWith('line\ntwo', undefined, undefined)
   })
   it('keeps the text and shows an error when send fails', async () => {
     const onSend = vi.fn().mockRejectedValue(new Error('network error'))

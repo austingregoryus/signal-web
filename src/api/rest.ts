@@ -3,7 +3,7 @@ import type { Store } from '../store/store'
 import type { AttachmentBlobStore } from '../store/attachmentsBlob'
 
 interface SendCapableClient {
-  sendMessage(input: { recipients?: string[]; groupId?: string; message?: string; base64Attachments?: string[] }): Promise<{ timestamp: number }>
+  sendMessage(input: { recipients?: string[]; groupId?: string; message?: string; base64Attachments?: string[]; quoteTimestamp?: number; quoteAuthor?: string }): Promise<{ timestamp: number }>
   sendReaction(input: { recipient?: string; groupId?: string; reaction: string; targetAuthor: string; targetTimestamp: number; remove?: boolean }): Promise<void>
   sendTyping(input: { recipient?: string; groupId?: string; stop?: boolean }): Promise<void>
   sendReceipt(input: { recipient: string; targetTimestamp: number; type: 'read' | 'viewed' }): Promise<void>
@@ -51,11 +51,11 @@ export function registerRestApi(app: FastifyInstance, deps: RestDeps): void {
     },
   )
 
-  app.post<{ Body: { conversationId: string; type: 'dm' | 'group'; message?: string; base64Attachments?: string[] } }>(
+  app.post<{ Body: { conversationId: string; type: 'dm' | 'group'; message?: string; base64Attachments?: string[]; quoteTimestamp?: number; quoteAuthor?: string } }>(
     '/api/send',
     auth,
     async (req, reply) => {
-      const { type, message, base64Attachments } = req.body
+      const { type, message, base64Attachments, quoteTimestamp, quoteAuthor } = req.body
       // Resolve a number-keyed DM to its canonical UUID (in case a prior merge
       // happened). Groups pass through unchanged — group ids are never aliased.
       const conversationId = type === 'group' ? req.body.conversationId : store.conversations.resolveAlias(req.body.conversationId)
@@ -64,14 +64,15 @@ export function registerRestApi(app: FastifyInstance, deps: RestDeps): void {
       const parsed = (base64Attachments ?? []).map(parseAttachment)
       const sent = await client.sendMessage(
         type === 'group'
-          ? { groupId: conversationId, message, base64Attachments: parsed.map((p) => p.base64) }
-          : { recipients: [conversationId], message, base64Attachments: parsed.map((p) => p.base64) },
+          ? { groupId: conversationId, message, base64Attachments: parsed.map((p) => p.base64), quoteTimestamp, quoteAuthor }
+          : { recipients: [conversationId], message, base64Attachments: parsed.map((p) => p.base64), quoteTimestamp, quoteAuthor },
       )
       const ts = sent.timestamp || Date.now()
       store.conversations.ensure({ id: conversationId, type })
       store.messages.upsert({
         conversationId, authorId: selfId, timestamp: ts, direction: 'out',
-        body: message ?? null, receivedAt: Date.now(),
+        body: message ?? null, quoteAuthorId: quoteAuthor ?? null, quoteTimestamp: quoteTimestamp ?? null,
+        receivedAt: Date.now(),
       })
       // Persist each attachment locally so the sender's own view renders it.
       // No signalId: we already have the bytes, so /api/attachments/:id serves

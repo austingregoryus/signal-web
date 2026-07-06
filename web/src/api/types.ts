@@ -6,6 +6,7 @@ export interface Message {
   id: number; conversationId: string; authorId: string; authorNumber: string | null
   timestamp: number; direction: 'in' | 'out'; body: string | null
   editedTimestamp: number | null; deleted: 0 | 1
+  quoteAuthorId: string | null; quoteTimestamp: number | null
   reactions: Reaction[]; receipts: Receipt[]; attachments: AttachmentMeta[]
 }
 export interface LoginResult { ok: boolean; webauthnRequired: boolean }

@@ -15,6 +15,7 @@ export function Chat(): React.JSX.Element {
   const [messages, setMessages] = useState<Message[]>([])
   const [typing, setTyping] = useState(false)
   const [showNew, setShowNew] = useState(false)
+  const [replyTo, setReplyTo] = useState<Message | null>(null)
   const typingTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
   const lastSeenRef = useRef(0)
 
@@ -65,7 +66,7 @@ export function Chat(): React.JSX.Element {
 
   useEffect(() => () => { if (typingTimer.current) clearTimeout(typingTimer.current) }, [])
 
-  const onSend = useCallback(async (text: string, base64Attachments?: string[]) => {
+  const onSend = useCallback(async (text: string, base64Attachments?: string[], quote?: { authorId: string; timestamp: number }) => {
     if (!selected) return
     const conv = conversations.find((c) => c.id === selected)
     await api.post('/api/send', {
@@ -73,7 +74,10 @@ export function Chat(): React.JSX.Element {
       type: conv?.type ?? 'dm',
       message: text,
       base64Attachments,
+      quoteTimestamp: quote?.timestamp,
+      quoteAuthor: quote?.authorId,
     })
+    if (quote) setReplyTo(null)
     await loadThread(selected)
     await loadConversations()
   }, [selected, conversations, loadThread, loadConversations])
@@ -130,8 +134,8 @@ export function Chat(): React.JSX.Element {
               </span>
               <span className={styles.threadName}>{selectedConv?.displayName ?? selectedConv?.id ?? selected}</span>
             </div>
-            <Thread messages={messages} onReact={onReact} typing={typing} />
-            <Composer onSend={onSend} />
+            <Thread messages={messages} onReact={onReact} onReply={setReplyTo} typing={typing} />
+            <Composer onSend={onSend} replyTo={replyTo} onCancelReply={() => setReplyTo(null)} />
           </>
         ) : (
           <div className={styles.empty}>Select a conversation</div>

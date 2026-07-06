@@ -1,11 +1,14 @@
-import { useRef, useState, type ChangeEvent, type KeyboardEvent } from 'react'
+import { useEffect, useRef, useState, type ChangeEvent, type KeyboardEvent } from 'react'
+import type { Message as Msg } from '../api/types'
 import { EmojiPicker } from './EmojiPicker'
 import styles from './Composer.module.css'
 
 export function Composer({
-  onSend,
+  onSend, replyTo, onCancelReply,
 }: {
-  onSend: (text: string, base64Attachments?: string[]) => void | Promise<void>
+  onSend: (text: string, base64Attachments?: string[], quote?: { authorId: string; timestamp: number }) => void | Promise<void>
+  replyTo?: Msg | null
+  onCancelReply?: () => void
 }): React.JSX.Element {
   const [text, setText] = useState('')
   const [error, setError] = useState<string | null>(null)
@@ -13,13 +16,21 @@ export function Composer({
   const fileInputRef = useRef<HTMLInputElement | null>(null)
   const textareaRef = useRef<HTMLTextAreaElement | null>(null)
 
+  // When a reply target is set, focus the textarea so the user can type
+  // immediately; clear it when the reply is cancelled or sent.
+  useEffect(() => {
+    if (replyTo) textareaRef.current?.focus()
+  }, [replyTo])
+
   async function send(): Promise<void> {
     const t = text.trim()
     if (!t) return
+    const quote = replyTo ? { authorId: replyTo.authorId, timestamp: replyTo.timestamp } : undefined
     try {
-      await onSend(t)
+      await onSend(t, undefined, quote)
       setText('')
       setError(null)
+      if (quote) onCancelReply?.()
     } catch {
       setError("Couldn't send — try again")
     }
@@ -70,6 +81,15 @@ export function Composer({
   }
   return (
     <div className={styles.bar}>
+      {replyTo ? (
+        <div className={styles.replyBar}>
+          <span className={styles.replyQuote}>
+            <span className={styles.replyLabel}>Replying to</span>
+            <span className={styles.replyText}>{replyTo.body ?? (replyTo.attachments.length > 0 ? '📎 Attachment' : 'Message')}</span>
+          </span>
+          <button type="button" className={styles.replyCancel} aria-label="Cancel reply" onClick={onCancelReply}>×</button>
+        </div>
+      ) : null}
       <button className={styles.attach} onClick={onAttachClick} aria-label="Attach file">📎</button>
       <input
         ref={fileInputRef}

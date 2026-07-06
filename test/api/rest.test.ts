@@ -94,6 +94,21 @@ describe('REST API', () => {
     expect(stored?.body).toBe('hello back')
   })
 
+  it('passes quote fields to signal-cli and stores them on the outgoing message', async () => {
+    const { session, csrf } = await login()
+    const res = await app.inject({
+      method: 'POST', url: '/api/send',
+      cookies: { sw_session: session, sw_csrf: csrf }, headers: { 'x-csrf-token': csrf },
+      payload: { conversationId: 'c1', type: 'dm', message: 'a reply', quoteTimestamp: 9999, quoteAuthor: 'alice-uuid' },
+    })
+    expect(res.statusCode).toBe(200)
+    // signal-cli receives the quote params.
+    expect(sendCalls[0]).toMatchObject({ quoteTimestamp: 9999, quoteAuthor: 'alice-uuid' })
+    // The local copy records the quote so the sender's view renders it.
+    const stored = store.messages.listByConversation('c1', 10).find((m) => m.direction === 'out' && m.body === 'a reply')
+    expect(stored).toMatchObject({ quoteAuthorId: 'alice-uuid', quoteTimestamp: 9999 })
+  })
+
   it('persists sent attachments locally and forwards bare base64 to signal-cli', async () => {
     const { session, csrf } = await login()
     // Tiny 1x1 PNG; sent as a data URL so the server can keep the content type.

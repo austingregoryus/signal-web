@@ -7,7 +7,59 @@
   border-top: 1px solid var(--border);
   background: var(--panel);
   flex-shrink: 0;
+  flex-wrap: wrap;
 }
+
+/* Reply-to preview bar shown above the input when quoting a message. */
+.replyBar {
+  flex-basis: 100%;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  margin-bottom: 4px;
+  background: var(--hover-tint);
+  border-left: 3px solid var(--accent);
+  border-radius: 8px;
+}
+
+.replyQuote {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.replyLabel {
+  font-size: .72rem;
+  font-weight: 600;
+  color: var(--accent);
+}
+
+.replyText {
+  font-size: .85rem;
+  color: var(--fg);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.replyCancel {
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  font-size: 1.3rem;
+  line-height: 1;
+  cursor: pointer;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+}
+.replyCancel:hover { background: var(--active-tint); color: var(--fg); }
 
 .box {
   flex: 1;

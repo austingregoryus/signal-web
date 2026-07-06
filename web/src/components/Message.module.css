@@ -1,5 +1,6 @@
 .row {
   display: flex;
+  align-items: flex-start;
   margin: 10px 16px 2px;
 }
 
@@ -46,3 +47,41 @@
 .edited { opacity: .85; font-style: italic; }
 .deleted { opacity: .6; font-style: italic; }
 .read { opacity: .9; }
+
+/* Quoted-message preview rendered at the top of a reply bubble. */
+.quote {
+  border-left: 3px solid currentColor;
+  padding: 2px 0 2px 8px;
+  margin-bottom: 6px;
+  opacity: .8;
+  font-size: .85rem;
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+}
+
+/* The reply trigger button; appears beside the bubble. Kept subtle until hover. */
+.replyBtn {
+  align-self: center;
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  font-size: .95rem;
+  line-height: 1;
+  cursor: pointer;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  opacity: 0;
+  flex-shrink: 0;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .replyBtn { transition: opacity 150ms ease, background-color 150ms ease; }
+}
+
+.row:hover .replyBtn { opacity: .7; }
+.replyBtn:hover { opacity: 1 !important; background: var(--hover-tint); }
