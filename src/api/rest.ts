@@ -1,6 +1,7 @@
 import type { FastifyInstance } from 'fastify'
 import type { Store } from '../store/store'
 import type { AttachmentBlobStore } from '../store/attachmentsBlob'
+import { normalizeGroupId } from '../store/groupId'
 
 interface SendCapableClient {
   sendMessage(input: { recipients?: string[]; groupId?: string; message?: string; base64Attachments?: string[]; quoteTimestamp?: number; quoteAuthor?: string }): Promise<{ timestamp: number }>
@@ -74,8 +75,11 @@ export function registerRestApi(app: FastifyInstance, deps: RestDeps): void {
     async (req, reply) => {
       const { type, message, base64Attachments, quoteTimestamp, quoteAuthor } = req.body
       // Resolve a number-keyed DM to its canonical UUID (in case a prior merge
-      // happened). Groups pass through unchanged — group ids are never aliased.
-      const conversationId = type === 'group' ? req.body.conversationId : store.conversations.resolveAlias(req.body.conversationId)
+      // happened), and a "group."-prefixed id to its raw canonical form. The
+      // client's toSendGroupId() re-prefixes for the wire; we store raw.
+      const conversationId = type === 'group'
+        ? normalizeGroupId(req.body.conversationId)
+        : store.conversations.resolveAlias(req.body.conversationId)
       // signal-cli expects un-prefixed base64; parseAttachment splits off any
       // data-URL prefix so we can also keep the content type + bytes locally.
       const parsed = (base64Attachments ?? []).map(parseAttachment)
@@ -116,7 +120,9 @@ export function registerRestApi(app: FastifyInstance, deps: RestDeps): void {
     auth,
     async (req, reply) => {
       const { type, targetTimestamp, message } = req.body
-      const conversationId = type === 'group' ? req.body.conversationId : store.conversations.resolveAlias(req.body.conversationId)
+      const conversationId = type === 'group'
+        ? normalizeGroupId(req.body.conversationId)
+        : store.conversations.resolveAlias(req.body.conversationId)
       await client.editMessage(
         type === 'group'
           ? { groupId: conversationId, targetTimestamp, message }

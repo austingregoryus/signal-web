@@ -1,4 +1,5 @@
 import type { Store } from '../store/store'
+import { normalizeGroupId } from '../store/groupId'
 
 interface ContactLike { number?: string; uuid?: string; name?: string; profileName?: string }
 interface GroupLike { id: string; name?: string }
@@ -31,7 +32,10 @@ export class ProfileService {
     }
     for (const g of groups) {
       if (g.name) {
-        this.deps.store.conversations.ensure({ id: g.id, type: 'group', displayName: g.name })
+        // signal-cli's /v1/groups returns the "group."-prefixed form; normalize
+        // to the raw base64 form so this matches the id inbound envelopes use
+        // (otherwise the group splits into two conversations).
+        this.deps.store.conversations.ensure({ id: normalizeGroupId(g.id), type: 'group', displayName: g.name })
         named++
       }
     }

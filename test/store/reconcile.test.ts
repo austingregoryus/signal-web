@@ -58,4 +58,42 @@ describe('reconcileConversationAliases', () => {
     expect(result.merged).toBe(0)
     expect(result.aliased).toBe(0)
   })
+
+  it('folds a group.-prefixed group conversation into its raw canonical form', () => {
+    // Reproduce the split: inbound under raw (named via profile would be on
+    // prefixed, but here inbound is unnamed), outbound under prefixed (named).
+    const s = open()
+    const RAW = 'GxH1JWjt6ejZYUjRwdyIRjqgip+u4i6cMziREZmGJhg='
+    const PREFIXED = 'group.R3hIMUpXanQ2ZWpaWVVqUndkeUlSanFnaXArdTRpNmNNemlSRVptR0poZz0='
+    s.conversations.ensure({ id: RAW, type: 'group' })
+    s.messages.upsert({ conversationId: RAW, authorId: 'bob', timestamp: 100, direction: 'in', body: 'inbound group msg', receivedAt: 1 })
+    s.conversations.ensure({ id: PREFIXED, type: 'group', displayName: 'Testing Group' })
+    s.messages.upsert({ conversationId: PREFIXED, authorId: 'self', timestamp: 200, direction: 'out', body: 'outbound', receivedAt: 2 })
+
+    const result = reconcileConversationAliases(s)
+    expect(result.merged).toBeGreaterThanOrEqual(1)
+    // One group conversation remains, under the RAW id, with the name carried over.
+    const groups = s.conversations.list().filter((c) => c.type === 'group')
+    expect(groups).toHaveLength(1)
+    expect(groups[0].id).toBe(RAW)
+    expect(groups[0].displayName).toBe('Testing Group')
+    // Both messages live under the canonical RAW conversation now.
+    expect(s.messages.listByConversation(RAW, 10)).toHaveLength(2)
+    expect(s.messages.listByConversation(PREFIXED, 10)).toHaveLength(0)
+  })
+
+  it('rewrites a prefixed-only group conversation id to raw', () => {
+    const s = open()
+    const RAW = 'GxH1JWjt6ejZYUjRwdyIRjqgip+u4i6cMziREZmGJhg='
+    const PREFIXED = 'group.R3hIMUpXanQ2ZWpaWVVqUndkeUlSanFnaXArdTRpNmNNemlSRVptR0poZz0='
+    s.conversations.ensure({ id: PREFIXED, type: 'group', displayName: 'Only Prefixed' })
+    s.messages.upsert({ conversationId: PREFIXED, authorId: 'self', timestamp: 1, direction: 'out', body: 'x', receivedAt: 1 })
+
+    reconcileConversationAliases(s)
+    // The id is now raw; messages repointed; name preserved.
+    expect(s.conversations.list().some((c) => c.id === PREFIXED)).toBe(false)
+    const g = s.conversations.list().find((c) => c.id === RAW)
+    expect(g?.displayName).toBe('Only Prefixed')
+    expect(s.messages.listByConversation(RAW, 10)).toHaveLength(1)
+  })
 })
