@@ -1,0 +1,22 @@
+# Sample cloudflared config for the Cloudflare Tunnel deployment.
+# Copy to your VM (or mount into the cloudflared container) and edit the values.
+# See DEPLOY.md for the full walkthrough.
+#
+# Two ways to run cloudflared:
+#   1. Token-based (recommended, simplest): set TUNNEL_TOKEN in the env and use
+#      `cloudflared tunnel --no-autoupdate run` (no config file needed; the
+#      ingress is configured in the Cloudflare dashboard / via `tunnel route`).
+#   2. Config-file-based (this file): use `cloudflared tunnel run signal-web`
+#      with this file at ~/.cloudflared/config.yml (or -config path).
+
+tunnel: signal-web
+credentials-file: /root/.cloudflared/<TUNNEL_ID>.json
+
+ingress:
+  # Route the public hostname to the app inside the compose network. The `app`
+  # service listens on container port 8090; cloudflared is on the same network
+  # when run as a compose sidecar (see docker-compose.tunnel.yml).
+  - hostname: signal.example.com
+    service: http://app:8090
+  # Catch-all: 404 anything else.
+  - service: http_status:404

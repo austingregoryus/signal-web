@@ -17,6 +17,7 @@ import { AttachmentBlobStore } from '../store/attachmentsBlob'
 import { ProfileService } from '../profile/service'
 import { pruneOlderThan } from '../store/prune'
 import { reconcileConversationAliases } from '../store/reconcile'
+import { registerSecurityHeaders } from './securityHeaders'
 import fastifyWebsocket from '@fastify/websocket'
 
 const DAY = 24 * 3600_000
@@ -59,7 +60,17 @@ export async function main(): Promise<void> {
   // default 1 MB body limit rejects even modest photos with a 413. 25 MB lets a
   // typical image through while staying well under signal-cli's own ceiling.
   const app = Fastify({ trustProxy: config.trustProxy, bodyLimit: 25 * 1024 * 1024 })
+
+  // Baseline security headers on EVERY response. Per-route headers (attachment
+  // CSP, /link harden()) override since the hook only sets a header the response
+  // doesn't already carry.
+  registerSecurityHeaders(app, config.publicUrl)
+
   await app.register(fastifyWebsocket)
+
+  // Liveness probe for the Docker HEALTHCHECK + orchestrators. Unauthenticated
+  // by design — it returns only a static status, no data.
+  app.get('/health', async () => ({ status: 'ok' }))
   await authPlugin(app, {
     store,
     sessionPolicy: { ttlMs: config.sessionTtlDays * DAY, idleMs: config.sessionIdleDays * DAY },
@@ -111,6 +122,15 @@ export async function main(): Promise<void> {
   await app.listen({ port: config.port, host: '0.0.0.0' })
   console.log(`[app] listening on :${config.port}`)
   if (linkEnabled && store.authConfig.getPasswordHash() == null) {
-    console.log(`[link] Open ${config.publicUrl}/link?t=${bootstrapToken} to link your device.`)
+    // Don't print the full /link?t=TOKEN URL to stdout — container logs are
+    // often shipped to aggregators and the token is the only thing gating
+    // device linking before a password is set. Tell the operator where to look
+    // and that they must supply the token themselves.
+    const hint = process.env.LINK_BOOTSTRAP_TOKEN
+      ? 'Set LINK_BOOTSTRAP_TOKEN in .env, then open this URL in a browser:'
+      : 'Set LINK_BOOTSTRAP_TOKEN in .env to a value you choose, then open this URL in a browser:'
+    console.log(`[link] Linking page is open (no password set yet). ${hint}`)
+    console.log(`[link]   ${config.publicUrl}/link?t=<LINK_BOOTSTRAP_TOKEN>`)
+    console.log('[link] Once linked, set a password (npm run set-password), then set ENABLE_LINK_PAGE=false.')
   }
 }

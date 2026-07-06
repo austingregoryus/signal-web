@@ -1,9 +1,10 @@
 services:
   signal-cli-rest-api:
     # Keep this current: Signal's servers reject outdated signal-cli clients during
-    # linking ("no data to encode"). 0.100 bundles signal-cli 0.14.5. Pin to a digest
-    # before real deployment (spec §9).
-    image: bbernhard/signal-cli-rest-api:0.100
+    # linking ("no data to encode"). 0.100 bundles signal-cli 0.14.5. Pinned to a
+    # digest so a malicious/buggy upstream tag push can't swap the image.
+    image: bbernhard/signal-cli-rest-api:0.100@sha256:2399d449123cdad56c4d859277e3b9127e1a00c4d2ab4601c239882609286cf8
+    restart: unless-stopped
     environment:
       - MODE=json-rpc
     volumes:
@@ -16,15 +17,18 @@ services:
     build: .
     env_file: .env
     depends_on: [signal-cli-rest-api]
-    # Host port 8190 avoids a Windows/WSL quirk: wslrelay.exe collides with
-    # Docker's proxy on [::1] when both bind the same published port, hanging
-    # any browser that resolves `localhost` to IPv6. The app still listens on
-    # 8090 *inside* the container; this only remaps the host side.
+    restart: unless-stopped
+    # Bind to 127.0.0.1 only — the app must NOT be reachable on the public IP;
+    # external traffic arrives via the Cloudflare Tunnel (see DEPLOY.md). The
+    # host port differs from the container's 8090 to dodge a Windows/WSL quirk
+    # (wslrelay collides with Docker's proxy on [::1]); on a Linux VM you can
+    # use any free port. To expose publicly, run cloudflared (compose override)
+    # proxying to this loopback port.
     ports:
-      - "8190:8090"
+      - "127.0.0.1:8190:8090"
     volumes:
-      # Persist the encrypted store (SQLCipher DB) + attachment blobs.
-      # This dir must exist so the DB can be opened on first boot.
+      # Persist the encrypted store (SQLCipher DB) + attachment blobs. The dir
+      # is owned by uid 1000 (the non-root `node` user the container runs as).
       - ./data:/app/data
     networks: [signalnet]
 

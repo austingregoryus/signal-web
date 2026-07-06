@@ -1,0 +1,32 @@
+# Cloudflare Tunnel sidecar — run with:
+#   docker compose -f docker-compose.yml -f docker-compose.tunnel.yml up -d
+#
+# This adds cloudflared as a service on the same network, proxying public HTTPS
+# traffic to the app. The app's published port stays bound to 127.0.0.1 only
+# (set in docker-compose.yml), so the ONLY public path in is via the tunnel.
+#
+# PREREQUISITE: create the tunnel and get a token (see DEPLOY.md §Cloudflare):
+#   cloudflared tunnel create signal-web   # prints the credentials JSON path
+#   cloudflared tunnel route dns signal-web signal.example.com
+#
+# Then either:
+#   A) Token-based (recommended): set TUNNEL_TOKEN in .env (or export it) and
+#      the ingress hostname in the Cloudflare dashboard.
+#   B) Config-based: mount your config.yml + credentials JSON (uncomment the
+#      volumes below) and edit cloudflared/config.yml.
+
+services:
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    restart: unless-stopped
+    depends_on: [app]
+    networks: [signalnet]
+    # A) Token-based — set TUNNEL_TOKEN in .env:
+    command: tunnel --no-autoupdate run
+    environment:
+      - TUNNEL_TOKEN=${TUNNEL_TOKEN:?set TUNNEL_TOKEN in .env (see DEPLOY.md)}
+    # B) Config-based — uncomment and edit instead of the token approach:
+    # command: tunnel --no-autoupdate --config /etc/cloudflared/config.yml run
+    # volumes:
+    #   - ./cloudflared/config.yml:/etc/cloudflared/config.yml:ro
+    #   - /root/.cloudflared:/root/.cloudflared:ro   # credentials JSON lives here
