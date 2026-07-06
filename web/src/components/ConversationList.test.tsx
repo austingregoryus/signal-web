@@ -4,8 +4,8 @@ import userEvent from '@testing-library/user-event'
 import { ConversationList } from './ConversationList'
 
 const convs = [
-  { id: 'alice-uuid', type: 'dm' as const, displayName: 'Alice', avatarPath: null, lastActivity: 2 },
-  { id: '+15551110002', type: 'dm' as const, displayName: null, avatarPath: null, lastActivity: 1 },
+  { id: 'alice-uuid', type: 'dm' as const, displayName: 'Alice', avatarPath: null, lastActivity: 2, unreadCount: 0 },
+  { id: '+15551110002', type: 'dm' as const, displayName: null, avatarPath: null, lastActivity: 1, unreadCount: 3 },
 ]
 
 describe('ConversationList', () => {

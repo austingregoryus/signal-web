@@ -12,6 +12,8 @@ export interface StoredConversation {
   displayName: string | null
   avatarPath: string | null
   lastActivity: number
+  lastReadAt: number
+  unreadCount: number
 }
 
 interface Row {
@@ -20,6 +22,7 @@ interface Row {
   display_name: string | null
   avatar_path: string | null
   last_activity: number
+  last_read_at: number
 }
 
 export class ConversationRepo {
@@ -50,13 +53,28 @@ export class ConversationRepo {
     const rows = this.db
       .prepare('SELECT * FROM conversations ORDER BY last_activity DESC')
       .all() as Row[]
-    return rows.map((r) => ({
-      id: r.id,
-      type: r.type,
-      displayName: r.display_name,
-      avatarPath: r.avatar_path,
-      lastActivity: r.last_activity,
-    }))
+    return rows.map((r) => {
+      // Unread = inbound messages newer than the last-read cursor.
+      const unread = (
+        this.db
+          .prepare("SELECT COUNT(*) AS n FROM messages WHERE conversation_id = ? AND direction = 'in' AND timestamp > ?")
+          .get(r.id, r.last_read_at) as { n: number }
+      ).n
+      return {
+        id: r.id,
+        type: r.type,
+        displayName: r.display_name,
+        avatarPath: r.avatar_path,
+        lastActivity: r.last_activity,
+        lastReadAt: r.last_read_at,
+        unreadCount: unread,
+      }
+    })
+  }
+
+  /** Mark a conversation read up to `now` (clears its unread badge). */
+  markRead(id: string, now: number): void {
+    this.db.prepare('UPDATE conversations SET last_read_at = MAX(last_read_at, ?) WHERE id = ?').run(now, id)
   }
 
   /**

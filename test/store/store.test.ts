@@ -35,7 +35,7 @@ describe('openStore', () => {
     expect(tables).toContain('attachments')
     expect(tables).toContain('contact_aliases')
     const version = store.db.prepare('SELECT version FROM schema_meta').get() as { version: number }
-    expect(version.version).toBe(4)
+    expect(version.version).toBe(5)
     store.close()
   })
 

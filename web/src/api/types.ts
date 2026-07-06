@@ -1,4 +1,4 @@
-export interface Conversation { id: string; type: 'dm' | 'group'; displayName: string | null; avatarPath: string | null; lastActivity: number }
+export interface Conversation { id: string; type: 'dm' | 'group'; displayName: string | null; avatarPath: string | null; lastActivity: number; unreadCount: number }
 export interface Reaction { reactorId: string; emoji: string; timestamp: number }
 export interface Receipt { recipientId: string; type: 'delivery' | 'read' | 'viewed'; timestamp: number }
 export interface AttachmentMeta { id: string; contentType: string | null; filename: string | null }

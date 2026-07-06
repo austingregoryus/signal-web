@@ -123,6 +123,18 @@ export function registerRestApi(app: FastifyInstance, deps: RestDeps): void {
     },
   )
 
+  // Mark a conversation read locally (clears its unread badge). Distinct from
+  // /api/read, which sends a read RECEIPT to signal-cli for the recipient.
+  app.post<{ Params: { id: string } }>(
+    '/api/conversations/:id/mark-read',
+    auth,
+    async (req, reply) => {
+      const id = store.conversations.resolveAlias(req.params.id)
+      store.conversations.markRead(id, Date.now())
+      return reply.send({ ok: true })
+    },
+  )
+
   app.post<{ Body: { conversationId: string; type: 'dm' | 'group'; message?: string; base64Attachments?: string[]; quoteTimestamp?: number; quoteAuthor?: string } }>(
     '/api/send',
     auth,

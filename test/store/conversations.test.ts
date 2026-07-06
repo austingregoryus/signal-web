@@ -49,6 +49,19 @@ describe('ConversationRepo', () => {
     expect(s.conversations.list().map((c) => c.id)).toEqual(['b', 'a'])
   })
 
+  it('counts unread inbound messages and resets on markRead', () => {
+    const s = open()
+    s.conversations.ensure({ id: 'c1', type: 'dm' })
+    // Two inbound messages (unread) + one outbound (never counts).
+    s.messages.upsert({ conversationId: 'c1', authorId: 'bob', timestamp: 100, direction: 'in', body: 'hi', receivedAt: 1 })
+    s.messages.upsert({ conversationId: 'c1', authorId: 'bob', timestamp: 200, direction: 'in', body: 'yo', receivedAt: 2 })
+    s.messages.upsert({ conversationId: 'c1', authorId: 'self', timestamp: 150, direction: 'out', body: 'hey', receivedAt: 3 })
+    expect(s.conversations.list().find((c) => c.id === 'c1')?.unreadCount).toBe(2)
+    // Mark read up to now — both are at-or-before now, so unread clears.
+    s.conversations.markRead('c1', 300)
+    expect(s.conversations.list().find((c) => c.id === 'c1')?.unreadCount).toBe(0)
+  })
+
   it('resolveAlias returns the uuid for a known number and passes others through', () => {
     const s = open()
     s.conversations.linkAlias('+15551234567', 'uuid-abc')

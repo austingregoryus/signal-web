@@ -22,6 +22,11 @@ export function ConversationList({
               {c.type === 'group' ? '👥' : initials(c.displayName)}
             </span>
             <span className={styles.name}>{c.displayName ?? c.id}</span>
+            {c.unreadCount > 0 ? (
+              <span className={styles.badge} aria-label={`${c.unreadCount} unread`}>
+                {c.unreadCount > 99 ? '99+' : c.unreadCount}
+              </span>
+            ) : null}
           </button>
           {onDelete ? (
             <button

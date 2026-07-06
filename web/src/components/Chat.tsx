@@ -8,10 +8,12 @@ import { Composer } from './Composer'
 import { NewConversation } from './NewConversation'
 import { ConfirmDialog } from './ConfirmDialog'
 import { ConversationInfo } from './ConversationInfo'
+import { useToast } from './Toast'
 import { avatarColor, initials } from './avatar'
 import styles from './Chat.module.css'
 
 export function Chat(): React.JSX.Element {
+  const toast = useToast()
   const [conversations, setConversations] = useState<Conversation[]>([])
   const [selected, setSelected] = useState<string | null>(null)
   const [messages, setMessages] = useState<Message[]>([])
@@ -103,6 +105,12 @@ export function Chat(): React.JSX.Element {
   useEffect(() => { void loadConversations() }, [loadConversations])
   useEffect(() => { if (selected) void loadThread(selected) }, [selected, loadThread])
   useEffect(() => { setShowInfo(false); setReplyTo(null); setEditing(null) }, [selected])
+  // Mark the opened conversation read locally + refresh the sidebar so the
+  // unread badge clears immediately.
+  useEffect(() => {
+    if (!selected) return
+    void api.post(`/api/conversations/${encodeURIComponent(selected)}/mark-read`).then(() => loadConversations())
+  }, [selected, loadConversations])
 
   useEffect(() => {
     if ('Notification' in window && Notification.permission === 'default') {
@@ -110,7 +118,7 @@ export function Chat(): React.JSX.Element {
     }
   }, [])
 
-  useLiveSocket((ev) => {
+  const connection = useLiveSocket((ev) => {
     if (ev.type === 'message' || ev.type === 'reaction' || ev.type === 'receipt') {
       void loadConversations()
       // Refresh the open thread when the event is FOR it. When the event carries
@@ -143,49 +151,67 @@ export function Chat(): React.JSX.Element {
   const onSend = useCallback(async (text: string, base64Attachments?: string[], quote?: { authorId: string; timestamp: number }) => {
     if (!selected) return
     const conv = conversations.find((c) => c.id === selected)
-    await api.post('/api/send', {
-      conversationId: selected,
-      type: conv?.type ?? 'dm',
-      message: text,
-      base64Attachments,
-      quoteTimestamp: quote?.timestamp,
-      quoteAuthor: quote?.authorId,
-    })
-    if (quote) setReplyTo(null)
-    await refreshTail(selected)
-    await loadConversations()
-  }, [selected, conversations, refreshTail, loadConversations])
+    try {
+      await api.post('/api/send', {
+        conversationId: selected,
+        type: conv?.type ?? 'dm',
+        message: text,
+        base64Attachments,
+        quoteTimestamp: quote?.timestamp,
+        quoteAuthor: quote?.authorId,
+      })
+      if (quote) setReplyTo(null)
+      await refreshTail(selected)
+      await loadConversations()
+    } catch {
+      toast.error("Couldn't send the message — try again")
+      throw new Error('send failed') // let the Composer clear its own error UI too
+    }
+  }, [selected, conversations, refreshTail, loadConversations, toast])
 
   const onDelete = useCallback(async (conv: Conversation) => {
-    await api.delete(`/api/conversations/${encodeURIComponent(conv.id)}`)
-    if (selected === conv.id) setSelected(null)
-    await loadConversations()
-  }, [selected, loadConversations])
+    try {
+      await api.delete(`/api/conversations/${encodeURIComponent(conv.id)}`)
+      if (selected === conv.id) setSelected(null)
+      await loadConversations()
+    } catch {
+      toast.error("Couldn't delete the conversation — try again")
+    }
+  }, [selected, loadConversations, toast])
 
   const onSubmitEdit = useCallback(async (timestamp: number, text: string) => {
     if (!selected) return
     const conv = conversations.find((c) => c.id === selected)
-    await api.post('/api/edit', {
-      conversationId: selected,
-      type: conv?.type ?? 'dm',
-      targetTimestamp: timestamp,
-      message: text,
-    })
-    await refreshTail(selected)
-  }, [selected, conversations, refreshTail])
+    try {
+      await api.post('/api/edit', {
+        conversationId: selected,
+        type: conv?.type ?? 'dm',
+        targetTimestamp: timestamp,
+        message: text,
+      })
+      await refreshTail(selected)
+    } catch {
+      toast.error("Couldn't save the edit — try again")
+      throw new Error('edit failed')
+    }
+  }, [selected, conversations, refreshTail, toast])
 
   const onReact = useCallback(async (m: Message, emoji: string) => {
     if (!selected) return
     const conv = conversations.find((c) => c.id === selected)
-    await api.post('/api/react', {
-      conversationId: selected,
-      type: conv?.type ?? 'dm',
-      targetAuthorId: m.authorId,
-      targetTimestamp: m.timestamp,
-      emoji,
-    })
-    await refreshTail(selected)
-  }, [selected, conversations, refreshTail])
+    try {
+      await api.post('/api/react', {
+        conversationId: selected,
+        type: conv?.type ?? 'dm',
+        targetAuthorId: m.authorId,
+        targetTimestamp: m.timestamp,
+        emoji,
+      })
+      await refreshTail(selected)
+    } catch {
+      toast.error("Couldn't add the reaction — try again")
+    }
+  }, [selected, conversations, refreshTail, toast])
 
   const selectedConv = conversations.find((c) => c.id === selected) ?? null
   const showThreadOnMobile = Boolean(selected)
@@ -205,7 +231,14 @@ export function Chat(): React.JSX.Element {
     <div className={`${styles.layout} ${showThreadOnMobile ? styles.threadActive : ''}`}>
       <aside className={styles.sidebar}>
         <div className={styles.sidebarHeader}>
-          <h1 className={styles.sidebarTitle}>Messages</h1>
+          <h1 className={styles.sidebarTitle}>
+            Messages
+            <span
+              className={`${styles.connDot} ${styles[`conn_${connection}`]}`}
+              title={connection === 'connected' ? 'Connected' : connection === 'connecting' ? 'Connecting…' : 'Reconnecting…'}
+              aria-label={connection === 'connected' ? 'Connected' : 'Disconnected — reconnecting'}
+            />
+          </h1>
           <button
             className={styles.newBtn}
             onClick={() => setShowNew(true)}

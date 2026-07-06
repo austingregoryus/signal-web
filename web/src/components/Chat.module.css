@@ -29,6 +29,30 @@
   font-size: 1.25rem;
   font-weight: 700;
   letter-spacing: -0.01em;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* Connection-status dot next to the "Messages" title. */
+.connDot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .connDot { transition: background-color 200ms ease; }
+}
+
+.conn_connected { background: #22c55e; }
+.conn_connecting { background: #f59e0b; animation: conn-pulse 1.2s ease-in-out infinite; }
+.conn_disconnected { background: #ef4444; }
+
+@keyframes conn-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: .35; }
 }
 
 .newBtn {
