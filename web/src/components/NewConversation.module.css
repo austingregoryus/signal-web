@@ -1,0 +1,117 @@
+.overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 900;
+  background: rgba(0, 0, 0, .4);
+  display: grid;
+  place-items: start center;
+  padding: 12vh 16px 16px;
+  animation: nc-fade-in .14s ease;
+}
+
+@keyframes nc-fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.modal {
+  width: 100%;
+  max-width: 420px;
+  background: var(--panel);
+  border-radius: 20px;
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow-lg);
+  overflow: hidden;
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 18px 20px 12px;
+  border-bottom: 1px solid var(--border);
+}
+
+.title {
+  margin: 0;
+  font-size: 1.1rem;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+
+.closeBtn {
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  font-size: 1.5rem;
+  line-height: 1;
+  cursor: pointer;
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  display: grid;
+  place-items: center;
+}
+.closeBtn:hover { background: var(--hover-tint); color: var(--fg); }
+
+.form {
+  padding: 16px 20px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.label {
+  font-size: .82rem;
+  font-weight: 600;
+  color: var(--muted);
+}
+
+.input {
+  padding: 11px 14px;
+  font-size: 1rem;
+  font-family: inherit;
+  border-radius: 12px;
+  border: 1px solid var(--border-strong);
+  background: var(--bg);
+  color: var(--fg);
+  outline: none;
+  resize: none;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .input { transition: box-shadow 150ms ease, border-color 150ms ease; }
+}
+
+.input:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--active-tint);
+}
+
+.error { color: #dc2626; font-size: .9rem; }
+
+.submit {
+  margin-top: 4px;
+  padding: 12px;
+  font-size: 1rem;
+  font-weight: 600;
+  font-family: inherit;
+  border: 0;
+  border-radius: 12px;
+  background: var(--accent);
+  color: #fff;
+  cursor: pointer;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .submit { transition: background-color 150ms ease; }
+}
+
+.submit:hover:not(:disabled) { background: var(--accent-hover); }
+.submit:disabled { opacity: .6; cursor: default; }

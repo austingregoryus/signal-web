@@ -16,8 +16,12 @@ services:
     build: .
     env_file: .env
     depends_on: [signal-cli-rest-api]
+    # Host port 8190 avoids a Windows/WSL quirk: wslrelay.exe collides with
+    # Docker's proxy on [::1] when both bind the same published port, hanging
+    # any browser that resolves `localhost` to IPv6. The app still listens on
+    # 8090 *inside* the container; this only remaps the host side.
     ports:
-      - "8090:8090"
+      - "8190:8090"
     volumes:
       # Persist the encrypted store (SQLCipher DB) + attachment blobs.
       # This dir must exist so the DB can be opened on first boot.

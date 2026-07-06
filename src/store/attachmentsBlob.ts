@@ -15,6 +15,11 @@ export class AttachmentBlobStore {
     return join(this.dir, name)
   }
 
+  async delete(id: string): Promise<void> {
+    const { unlink } = await import('node:fs/promises')
+    try { await unlink(this.pathFor(id)) } catch { /* already gone — fine */ }
+  }
+
   async put(id: string, bytes: Buffer): Promise<void> {
     await mkdir(this.dir, { recursive: true })
     const iv = randomBytes(12)

@@ -1,3 +1,5 @@
+import { toSendGroupId } from '../store/groupId'
+
 export interface SignalClientOptions {
   apiUrl: string
   number: string
@@ -18,6 +20,13 @@ export interface Contact {
   uuid?: string
   name?: string
   profileName?: string
+}
+
+export interface GroupInfo {
+  name: string
+  description: string
+  members: string[]
+  admins: string[]
 }
 
 export class SignalClient {
@@ -41,7 +50,7 @@ export class SignalClient {
   }
 
   async sendMessage(input: SendInput): Promise<{ timestamp: number }> {
-    const recipients = input.groupId ? [input.groupId] : (input.recipients ?? [])
+    const recipients = input.groupId ? [toSendGroupId(input.groupId)] : (input.recipients ?? [])
     const body: Record<string, unknown> = {
       number: this.opts.number,
       recipients,
@@ -56,6 +65,26 @@ export class SignalClient {
     return { timestamp: json?.timestamp ?? 0 }
   }
 
+  /**
+   * Edit a previously-sent message. signal-cli implements editing as a `/v2/send`
+   * call carrying the new text plus the original message's timestamp as
+   * `edit_timestamp`. Only your own outgoing messages can be edited.
+   */
+  async editMessage(input: {
+    recipient?: string
+    groupId?: string
+    targetTimestamp: number
+    message: string
+  }): Promise<void> {
+    const recipients = input.groupId ? [toSendGroupId(input.groupId)] : (input.recipient ? [input.recipient] : [])
+    await this.post('/v2/send', {
+      number: this.opts.number,
+      recipients,
+      message: input.message,
+      edit_timestamp: input.targetTimestamp,
+    }, 'edit')
+  }
+
   async sendReaction(input: {
     recipient?: string
     groupId?: string
@@ -65,7 +94,7 @@ export class SignalClient {
     remove?: boolean
   }): Promise<void> {
     await this.post(`/v1/reactions/${encodeURIComponent(this.opts.number)}`, {
-      recipient: input.groupId ?? input.recipient,
+      recipient: input.groupId ? toSendGroupId(input.groupId) : input.recipient,
       reaction: input.reaction,
       target_author: input.targetAuthor,
       timestamp: input.targetTimestamp,
@@ -85,7 +114,7 @@ export class SignalClient {
     const res = await this.fetchImpl(this.url(`/v1/typing-indicator/${encodeURIComponent(this.opts.number)}`), {
       method: input.stop ? 'DELETE' : 'PUT',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ recipient: input.groupId ?? input.recipient }),
+      body: JSON.stringify({ recipient: input.groupId ? toSendGroupId(input.groupId) : input.recipient }),
     })
     if (!res.ok) throw new Error(`typing failed: ${res.status}`)
   }
@@ -103,10 +132,67 @@ export class SignalClient {
     return (await res.json()) as Contact[]
   }
 
+  /**
+   * Resolve a phone number to its Signal UUID. Conversation ids are UUID-based
+   * for inbound messages (signal-cli always supplies sourceUuid), so starting
+   * a new conversation by UUID — rather than the raw number — keeps the user's
+   * outgoing thread and the contact's later replies under one conversation.
+   * Returns null if the number isn't a known contact (caller falls back to the
+   * number itself).
+   */
+  async resolveUuid(number: string): Promise<string | null> {
+    try {
+      const contacts = await this.listContacts()
+      const hit = contacts.find((c) => c.number === number)
+      // signal-cli can return a contact entry with an empty/absent uuid when
+      // the number isn't registered yet — treat that as "not resolved" so the
+      // caller falls back to the raw number instead of creating a conversation
+      // with an empty id.
+      const uuid = hit?.uuid
+      return uuid && uuid.length > 0 ? uuid : null
+    } catch {
+      return null
+    }
+  }
+
   async listGroups(): Promise<Array<{ id: string; name?: string }>> {
     const res = await this.fetchImpl(this.url(`/v1/groups/${encodeURIComponent(this.opts.number)}`))
     if (!res.ok) throw new Error(`groups failed: ${res.status}`)
     return (await res.json()) as Array<{ id: string; name?: string }>
+  }
+
+  /**
+   * Fetch full info for one group, including the member list. The id is the
+   * conversation's stored (raw) group id; it's converted to the prefixed form
+   * signal-cli's REST API expects.
+   */
+  async getGroup(groupId: string): Promise<GroupInfo> {
+    const sendId = toSendGroupId(groupId)
+    const res = await this.fetchImpl(this.url(`/v1/groups/${encodeURIComponent(this.opts.number)}/${encodeURIComponent(sendId)}`))
+    if (!res.ok) throw new Error(`group info failed: ${res.status}`)
+    const data = (await res.json()) as {
+      name?: string
+      description?: string
+      members?: string[]
+      admins?: string[]
+    }
+    return {
+      name: data.name ?? '',
+      description: data.description ?? '',
+      members: data.members ?? [],
+      admins: data.admins ?? [],
+    }
+  }
+
+  /** Rename a group. Propagates to all members via Signal. */
+  async updateGroup(groupId: string, input: { name?: string; description?: string }): Promise<void> {
+    const sendId = toSendGroupId(groupId)
+    const res = await this.fetchImpl(this.url(`/v1/groups/${encodeURIComponent(this.opts.number)}/${encodeURIComponent(sendId)}`), {
+      method: 'PUT',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(input),
+    })
+    if (!res.ok) throw new Error(`group update failed: ${res.status}`)
   }
 
   async getLinkingQr(deviceName: string): Promise<{ contentType: string; bytes: Buffer }> {

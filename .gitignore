@@ -8,3 +8,4 @@ link-qr.png
 web/node_modules/
 web/dist/
 web/*.tsbuildinfo
+.kt/

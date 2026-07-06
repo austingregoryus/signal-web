@@ -3,7 +3,7 @@ import { render, screen } from '@testing-library/react'
 import { Thread } from './Thread'
 import type { Message } from '../api/types'
 
-const base = { conversationId: 'c1', authorId: 'a', authorNumber: null, reactions: [], receipts: [], attachments: [] }
+const base = { conversationId: 'c1', authorId: 'a', authorNumber: null, reactions: [], receipts: [], attachments: [], quoteAuthorId: null, quoteTimestamp: null }
 const msgs: Message[] = [
   { ...base, id: 1, timestamp: 1000, direction: 'in', body: 'hello', editedTimestamp: null, deleted: 0 },
   { ...base, id: 2, timestamp: 2000, direction: 'out', body: 'hi back', editedTimestamp: 2500, deleted: 0 },

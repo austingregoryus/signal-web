@@ -1,4 +1,4 @@
-export const SCHEMA_VERSION = 3
+export const SCHEMA_VERSION = 5
 
 export const SCHEMA_SQL = `
 CREATE TABLE IF NOT EXISTS schema_meta (
@@ -10,8 +10,21 @@ CREATE TABLE IF NOT EXISTS conversations (
   type          TEXT NOT NULL,              -- 'dm' | 'group'
   display_name  TEXT,                       -- resolved in a later milestone; may be null
   avatar_path   TEXT,                       -- resolved in a later milestone
-  last_activity INTEGER NOT NULL DEFAULT 0  -- ms timestamp of newest message
+  last_activity INTEGER NOT NULL DEFAULT 0, -- ms timestamp of newest message
+  last_read_at  INTEGER NOT NULL DEFAULT 0  -- ms timestamp up to which the user has read
 );
+
+-- Maps a phone-number-keyed conversation to its canonical UUID. A contact can
+-- be keyed by number (when /api/start couldn't resolve a UUID) AND by UUID
+-- (when their inbound reply arrives via signal-cli, which always supplies
+-- sourceUuid). Without this, the two become separate conversations that never
+-- thread together. resolveAlias() folds the number into the uuid at read/write
+-- time, and mergeInto() physically collapses the duplicate rows.
+CREATE TABLE IF NOT EXISTS contact_aliases (
+  number TEXT PRIMARY KEY,
+  uuid   TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_contact_aliases_uuid ON contact_aliases(uuid);
 
 CREATE TABLE IF NOT EXISTS messages (
   id               INTEGER PRIMARY KEY AUTOINCREMENT,

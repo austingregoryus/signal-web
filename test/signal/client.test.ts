@@ -49,4 +49,36 @@ describe('SignalClient', () => {
     await expect(client.sendMessage({ recipients: ['+15551119999'], message: 'x' })).rejects.toThrow(/send failed/i)
     await expect(client.sendMessage({ recipients: ['+15551119999'], message: 'x' })).rejects.not.toThrow(/15551119999/)
   })
+
+  it('converts a raw group id to the group.-prefixed form signal-cli /v2/send expects', async () => {
+    // Inbound envelopes carry the raw base64 group id; signal-cli's send API
+    // needs "group." + base64(<raw string as UTF-8>). This is the exact value
+    // verified against a live signal-cli instance.
+    const rawGroupId = 'GxH1JWjt6ejZYUjRwdyIRjqgip+u4i6cMziREZmGJhg='
+    const expected = 'group.R3hIMUpXanQ2ZWpaWVVqUndkeUlSanFnaXArdTRpNmNNemlSRVptR0poZz0='
+    let captured: { body: unknown } | undefined
+    const client = new SignalClient({
+      ...base,
+      fetchImpl: mockFetch((_url, init) => {
+        captured = { body: JSON.parse(String(init?.body)) }
+        return { status: 201, body: { timestamp: 1712000000000 } }
+      }),
+    })
+    await client.sendMessage({ groupId: rawGroupId, message: 'hi group' })
+    const recipients = (captured?.body as { recipients: string[] }).recipients
+    expect(recipients).toEqual([expected])
+  })
+
+  it('passes a DM recipient through unchanged (no group. prefix)', async () => {
+    let captured: { body: unknown } | undefined
+    const client = new SignalClient({
+      ...base,
+      fetchImpl: mockFetch((_url, init) => {
+        captured = { body: JSON.parse(String(init?.body)) }
+        return { status: 201, body: { timestamp: 1 } }
+      }),
+    })
+    await client.sendMessage({ recipients: ['uuid-or-number'], message: 'hi' })
+    expect((captured?.body as { recipients: string[] }).recipients).toEqual(['uuid-or-number'])
+  })
 })

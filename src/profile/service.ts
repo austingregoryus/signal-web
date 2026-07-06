@@ -1,4 +1,5 @@
 import type { Store } from '../store/store'
+import { normalizeGroupId } from '../store/groupId'
 
 interface ContactLike { number?: string; uuid?: string; name?: string; profileName?: string }
 interface GroupLike { id: string; name?: string }
@@ -21,6 +22,9 @@ export class ProfileService {
     for (const c of contacts) {
       const name = c.name || c.profileName
       const id = c.uuid || c.number
+      // Seed the alias table so a number-keyed conversation can later be folded
+      // into the UUID when both identifiers are present.
+      if (c.uuid && c.number) this.deps.store.conversations.linkAlias(c.number, c.uuid)
       if (name && id) {
         this.deps.store.conversations.ensure({ id, type: 'dm', displayName: name })
         named++
@@ -28,7 +32,10 @@ export class ProfileService {
     }
     for (const g of groups) {
       if (g.name) {
-        this.deps.store.conversations.ensure({ id: g.id, type: 'group', displayName: g.name })
+        // signal-cli's /v1/groups returns the "group."-prefixed form; normalize
+        // to the raw base64 form so this matches the id inbound envelopes use
+        // (otherwise the group splits into two conversations).
+        this.deps.store.conversations.ensure({ id: normalizeGroupId(g.id), type: 'group', displayName: g.name })
         named++
       }
     }

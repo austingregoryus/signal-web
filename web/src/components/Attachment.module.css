@@ -1,2 +1,65 @@
-.image { max-width: 260px; max-height: 260px; border-radius: 10px; display: block; margin-top: 4px; }
-.file { display: inline-block; margin-top: 4px; color: var(--accent); text-decoration: underline; }
+.image {
+  max-width: 260px;
+  max-height: 260px;
+  border-radius: 12px;
+  display: block;
+  margin-top: 6px;
+  box-shadow: var(--shadow-sm);
+  cursor: zoom-in;
+  transition: transform .12s ease, box-shadow .12s ease;
+}
+.image:hover {
+  transform: scale(1.015);
+  box-shadow: var(--shadow-md);
+}
+.file {
+  display: inline-block;
+  margin-top: 6px;
+  color: var(--accent);
+  text-decoration: underline;
+  font-size: .9rem;
+}
+
+/* Full-viewport lightbox: click backdrop / × / Escape to dismiss. */
+.lightbox {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  background: rgba(0, 0, 0, .88);
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  cursor: zoom-out;
+  animation: lb-fade-in .14s ease;
+}
+
+@keyframes lb-fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+.lightboxImg {
+  max-width: min(92vw, 1400px);
+  max-height: 90vh;
+  object-fit: contain;
+  border-radius: 8px;
+  box-shadow: var(--shadow-lg);
+  cursor: default;
+}
+.lightboxClose {
+  position: fixed;
+  top: 16px;
+  right: 20px;
+  width: 40px;
+  height: 40px;
+  border: none;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, .14);
+  color: #fff;
+  font-size: 26px;
+  line-height: 1;
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+  transition: background .12s ease;
+}
+.lightboxClose:hover { background: rgba(255, 255, 255, .26); }

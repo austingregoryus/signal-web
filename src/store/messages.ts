@@ -86,13 +86,21 @@ export class MessageRepo {
       })
   }
 
-  listByConversation(conversationId: string, limit: number): StoredMessage[] {
-    const rows = this.db
-      .prepare(
-        `SELECT * FROM messages WHERE conversation_id = ?
-         ORDER BY timestamp DESC LIMIT ?`,
-      )
-      .all(conversationId, limit) as Row[]
+  /**
+   * List messages for a conversation, newest-first. Pass `beforeTimestamp` to
+   * page: returns messages strictly older than that cursor (exclusive), which
+   * lets the client load the newest N first, then fetch older batches as the
+   * user scrolls up. Omit it for the initial newest-first page.
+   */
+  listByConversation(conversationId: string, limit: number, beforeTimestamp?: number): StoredMessage[] {
+    const sql = beforeTimestamp != null
+      ? `SELECT * FROM messages WHERE conversation_id = ? AND timestamp < ?
+         ORDER BY timestamp DESC LIMIT ?`
+      : `SELECT * FROM messages WHERE conversation_id = ?
+         ORDER BY timestamp DESC LIMIT ?`
+    const rows = (beforeTimestamp != null
+      ? this.db.prepare(sql).all(conversationId, beforeTimestamp, limit)
+      : this.db.prepare(sql).all(conversationId, limit)) as Row[]
     return rows.map(toStored)
   }
 
@@ -112,5 +120,17 @@ export class MessageRepo {
          WHERE author_id = ? AND timestamp = ? AND deleted = 0`,
       )
       .run(newBody, editedTimestamp, authorId, timestamp)
+  }
+
+  /**
+   * Look up the conversation a (authorId, timestamp) message belongs to. Used by
+   * the live bridge to attribute reaction/receipt events to the right thread so
+   * the browser refreshes the correct conversation. Returns null if not found.
+   */
+  findConversationForMessage(authorId: string, timestamp: number): string | null {
+    const row = this.db
+      .prepare('SELECT conversation_id FROM messages WHERE author_id = ? AND timestamp = ?')
+      .get(authorId, timestamp) as { conversation_id: string } | undefined
+    return row?.conversation_id ?? null
   }
 }

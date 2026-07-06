@@ -16,6 +16,7 @@ import { registerStaticSite } from '../api/static'
 import { AttachmentBlobStore } from '../store/attachmentsBlob'
 import { ProfileService } from '../profile/service'
 import { pruneOlderThan } from '../store/prune'
+import { reconcileConversationAliases } from '../store/reconcile'
 import fastifyWebsocket from '@fastify/websocket'
 
 const DAY = 24 * 3600_000
@@ -29,6 +30,16 @@ export async function main(): Promise<void> {
   const bridge = new LiveBridge({ store, hub, selfId })
   const blobs = new AttachmentBlobStore(config.attachmentDir, config.dbKey)
   const profile = new ProfileService({ store, client, avatarDir: config.attachmentDir })
+
+  // One-time reconciliation: fold any number-keyed conversations into their
+  // UUID-keyed canonical form (repairs duplicates from before the auto-merge
+  // existed). Idempotent — a no-op on a clean store. Non-fatal on failure.
+  try {
+    const { merged, aliased } = reconcileConversationAliases(store)
+    if (merged > 0) console.log(`[store] merged ${merged} duplicate conversation(s); ${aliased} alias(es) recorded`)
+  } catch (err) {
+    console.warn(`[store] reconcile failed: ${err instanceof Error ? err.message : String(err)}`)
+  }
 
   // Live connection state of the signal-cli receiver, surfaced on the linking page.
   const signalState = { connected: false }
@@ -44,7 +55,10 @@ export async function main(): Promise<void> {
   })
   receiver.start()
 
-  const app = Fastify({ trustProxy: config.trustProxy })
+  // Attachments are sent as base64 JSON (~33% larger than the raw bytes), so the
+  // default 1 MB body limit rejects even modest photos with a 413. 25 MB lets a
+  // typical image through while staying well under signal-cli's own ceiling.
+  const app = Fastify({ trustProxy: config.trustProxy, bodyLimit: 25 * 1024 * 1024 })
   await app.register(fastifyWebsocket)
   await authPlugin(app, {
     store,
@@ -53,7 +67,7 @@ export async function main(): Promise<void> {
     webauthn: { rpId: config.rpId, rpName: 'Signal Web', origin: config.rpOrigin },
     secureCookies: config.secureCookies,
   })
-  registerRestApi(app, { store, client, selfId })
+  registerRestApi(app, { store, client, selfId, blobs })
   registerAttachmentRoute(app, { store, client, blobs })
 
   // Linking page (/link) — OFF by default; opt in with ENABLE_LINK_PAGE=true.
@@ -73,13 +87,18 @@ export async function main(): Promise<void> {
     bootstrapToken,
   })
   await registerBrowserWs(app, {
-    store, hub, allowedOrigin: config.allowedOrigin,
+    store, hub, allowedOrigin: config.allowedOrigins,
     sessionPolicy: { ttlMs: config.sessionTtlDays * DAY, idleMs: config.sessionIdleDays * DAY },
   })
 
   // periodic maintenance
   setInterval(() => { void profile.refresh() }, 10 * 60_000).unref()
-  setInterval(() => { pruneOlderThan(store, Date.now()) }, 60 * 60_000).unref()
+  setInterval(() => {
+    const result = pruneOlderThan(store, Date.now())
+    if (result.attachmentIds.length > 0) {
+      void Promise.all(result.attachmentIds.map((id) => blobs.delete(id)))
+    }
+  }, 60 * 60_000).unref()
   void profile.refresh()
 
   const webDir = process.env.WEB_DIR ?? './web/dist'

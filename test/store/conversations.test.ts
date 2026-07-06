@@ -48,4 +48,60 @@ describe('ConversationRepo', () => {
     s.conversations.touch('b', 200)
     expect(s.conversations.list().map((c) => c.id)).toEqual(['b', 'a'])
   })
+
+  it('counts unread inbound messages and resets on markRead', () => {
+    const s = open()
+    s.conversations.ensure({ id: 'c1', type: 'dm' })
+    // Two inbound messages (unread) + one outbound (never counts).
+    s.messages.upsert({ conversationId: 'c1', authorId: 'bob', timestamp: 100, direction: 'in', body: 'hi', receivedAt: 1 })
+    s.messages.upsert({ conversationId: 'c1', authorId: 'bob', timestamp: 200, direction: 'in', body: 'yo', receivedAt: 2 })
+    s.messages.upsert({ conversationId: 'c1', authorId: 'self', timestamp: 150, direction: 'out', body: 'hey', receivedAt: 3 })
+    expect(s.conversations.list().find((c) => c.id === 'c1')?.unreadCount).toBe(2)
+    // Mark read up to now — both are at-or-before now, so unread clears.
+    s.conversations.markRead('c1', 300)
+    expect(s.conversations.list().find((c) => c.id === 'c1')?.unreadCount).toBe(0)
+  })
+
+  it('resolveAlias returns the uuid for a known number and passes others through', () => {
+    const s = open()
+    s.conversations.linkAlias('+15551234567', 'uuid-abc')
+    expect(s.conversations.resolveAlias('+15551234567')).toBe('uuid-abc')
+    // Unknown number and already-uuid ids come back unchanged.
+    expect(s.conversations.resolveAlias('+15559999999')).toBe('+15559999999')
+    expect(s.conversations.resolveAlias('uuid-xyz')).toBe('uuid-xyz')
+  })
+
+  it('linkAlias is idempotent', () => {
+    const s = open()
+    s.conversations.linkAlias('+15551234567', 'uuid-abc')
+    s.conversations.linkAlias('+15551234567', 'uuid-abc')
+    expect(s.conversations.resolveAlias('+15551234567')).toBe('uuid-abc')
+  })
+
+  it('mergeInto repoints messages, carries the display name, and deletes the obsolete row', () => {
+    const s = open()
+    // Number-keyed conversation (created by /api/start) with a name and a message.
+    s.conversations.ensure({ id: '+15551234567', type: 'dm', displayName: 'Dad' })
+    s.messages.upsert({ conversationId: '+15551234567', authorId: 'self', timestamp: 100, direction: 'out', body: 'hi', receivedAt: 1 })
+    // UUID-keyed conversation (created when Dad replied) — no name, one inbound message.
+    s.conversations.ensure({ id: 'uuid-dad', type: 'dm' })
+    s.messages.upsert({ conversationId: 'uuid-dad', authorId: 'uuid-dad', authorNumber: '+15551234567', timestamp: 200, direction: 'in', body: 'hello', receivedAt: 2 })
+
+    s.conversations.mergeInto('uuid-dad', '+15551234567')
+
+    const convs = s.conversations.list()
+    expect(convs.map((c) => c.id)).toEqual(['uuid-dad'])
+    expect(convs[0].displayName).toBe('Dad') // name carried over from the number-keyed row
+    // Both messages now live under the canonical uuid conversation.
+    const msgs = s.messages.listByConversation('uuid-dad', 10)
+    expect(msgs.map((m) => m.body).sort()).toEqual(['hello', 'hi'])
+    expect(s.messages.listByConversation('+15551234567', 10)).toHaveLength(0)
+  })
+
+  it('mergeInto is a no-op when the obsolete conversation does not exist', () => {
+    const s = open()
+    s.conversations.ensure({ id: 'uuid-dad', type: 'dm' })
+    s.conversations.mergeInto('uuid-dad', '+15550000000') // never created
+    expect(s.conversations.list().map((c) => c.id)).toEqual(['uuid-dad'])
+  })
 })

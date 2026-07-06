@@ -1,6 +1,115 @@
-.bar { display: flex; gap: 8px; padding: 10px 12px; border-top: 1px solid #8882; }
-.box { flex: 1; resize: none; font: inherit; padding: 10px 12px; border-radius: 12px; border: 1px solid #8883; background: transparent; color: var(--fg); }
-.send { border: 0; border-radius: 12px; padding: 0 16px; background: var(--accent); color: #fff; font-size: 1.1rem; cursor: pointer; }
-.attach { border: 0; border-radius: 12px; padding: 0 12px; background: transparent; color: var(--fg); font-size: 1.1rem; cursor: pointer; }
+.bar {
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+  padding: 12px 16px;
+  padding-bottom: max(12px, env(safe-area-inset-bottom));
+  border-top: 1px solid var(--border);
+  background: var(--panel);
+  flex-shrink: 0;
+  flex-wrap: wrap;
+}
+
+/* Reply-to preview bar shown above the input when quoting a message. */
+.replyBar {
+  flex-basis: 100%;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  margin-bottom: 4px;
+  background: var(--hover-tint);
+  border-left: 3px solid var(--accent);
+  border-radius: 8px;
+}
+
+.replyQuote {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.replyLabel {
+  font-size: .72rem;
+  font-weight: 600;
+  color: var(--accent);
+}
+
+.replyText {
+  font-size: .85rem;
+  color: var(--fg);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.replyCancel {
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  font-size: 1.3rem;
+  line-height: 1;
+  cursor: pointer;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+}
+.replyCancel:hover { background: var(--active-tint); color: var(--fg); }
+
+.box {
+  flex: 1;
+  resize: none;
+  font: inherit;
+  font-size: .95rem;
+  line-height: 1.4;
+  max-height: 120px;
+  padding: 10px 16px;
+  border-radius: 20px;
+  border: 1px solid var(--border-strong);
+  background: var(--bg);
+  color: var(--fg);
+  outline: none;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .box { transition: box-shadow 150ms ease, border-color 150ms ease; }
+}
+
+.box:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--active-tint);
+}
+
+.send, .attach, .emoji {
+  border: 0;
+  border-radius: 50%;
+  width: 40px;
+  height: 40px;
+  flex-shrink: 0;
+  display: grid;
+  place-items: center;
+  font-size: 1.1rem;
+  cursor: pointer;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .send, .attach, .emoji { transition: background-color 150ms ease, transform 150ms ease; }
+}
+
+.send { background: var(--accent); color: #fff; }
+.send:hover { background: var(--accent-hover); }
+.send:active { transform: scale(.94); }
+
+.attach, .emoji { background: var(--hover-tint); color: var(--fg); }
+.attach:hover, .emoji:hover { background: var(--active-tint); }
+.attach:disabled { opacity: .4; cursor: not-allowed; }
+.attach:disabled:hover { background: var(--hover-tint); }
+
 .fileInput { display: none; }
+
 .error { align-self: center; color: #e04b4b; font-size: 0.85rem; }

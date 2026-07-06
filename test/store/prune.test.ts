@@ -42,6 +42,8 @@ describe('pruneOlderThan', () => {
     const res = pruneOlderThan(s, NOW)
     expect(res).toMatchObject({ reactions: 1, receipts: 1, attachments: 1 })
     expect(s.reactions.listForMessage('a', OLD)).toHaveLength(0)
+    // Pruned attachment ids are returned so the caller can delete their blobs.
+    expect(res.attachmentIds).toEqual(['att'])
   })
 
   it('respects a custom window', () => {

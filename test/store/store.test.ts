@@ -6,7 +6,10 @@ import { openStore } from '../../src/store/store'
 
 const paths: string[] = []
 function tmpDb(): string {
-  const p = join(tmpdir(), `signal-web-test-${paths.length}-${process.pid}.db`)
+  // Unique per call (not per index) so reopened-with-a-different-key tests get
+  // a fresh file — reusing a path across tests leaks the WAL/SHM and confuses
+  // SQLCipher's wrong-key detection.
+  const p = join(tmpdir(), `signal-web-test-${Date.now()}-${Math.round(performance.now())}-${process.pid}.db`)
   paths.push(p)
   return p
 }
@@ -30,8 +33,9 @@ describe('openStore', () => {
     expect(tables).toContain('reactions')
     expect(tables).toContain('receipts')
     expect(tables).toContain('attachments')
+    expect(tables).toContain('contact_aliases')
     const version = store.db.prepare('SELECT version FROM schema_meta').get() as { version: number }
-    expect(version.version).toBe(3)
+    expect(version.version).toBe(5)
     store.close()
   })
 
