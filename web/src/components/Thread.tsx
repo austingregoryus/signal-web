@@ -4,11 +4,12 @@ import { Message } from './Message'
 import styles from './Thread.module.css'
 
 export function Thread({
-  messages, onReact, onReply, typing,
+  messages, onReact, onReply, onEdit, typing,
 }: {
   messages: Msg[]
   onReact?: (m: Msg, emoji: string) => void
   onReply?: (m: Msg) => void
+  onEdit?: (m: Msg) => void
   typing?: boolean
 }): React.JSX.Element {
   const endRef = useRef<HTMLDivElement>(null)
@@ -34,6 +35,7 @@ export function Thread({
             compact={compact}
             onReact={onReact ? (emoji) => onReact(m, emoji) : undefined}
             onReply={onReply}
+            onEdit={onEdit}
             quoteOf={quoteOf}
           />
         )

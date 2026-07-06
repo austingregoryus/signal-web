@@ -107,6 +107,8 @@
 
 .attach, .emoji { background: var(--hover-tint); color: var(--fg); }
 .attach:hover, .emoji:hover { background: var(--active-tint); }
+.attach:disabled { opacity: .4; cursor: not-allowed; }
+.attach:disabled:hover { background: var(--hover-tint); }
 
 .fileInput { display: none; }
 

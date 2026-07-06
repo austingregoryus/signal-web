@@ -61,9 +61,16 @@
   -webkit-box-orient: vertical;
 }
 
-/* The reply trigger button; appears beside the bubble. Kept subtle until hover. */
-.replyBtn {
+/* Per-message action buttons (reply, edit); appear beside the bubble on hover. */
+.actions {
+  display: flex;
+  flex-direction: column;
   align-self: center;
+  gap: 2px;
+  flex-shrink: 0;
+}
+
+.actionBtn {
   border: 0;
   background: transparent;
   color: var(--muted);
@@ -76,12 +83,11 @@
   display: grid;
   place-items: center;
   opacity: 0;
-  flex-shrink: 0;
 }
 
 @media (prefers-reduced-motion: no-preference) {
-  .replyBtn { transition: opacity 150ms ease, background-color 150ms ease; }
+  .actionBtn { transition: opacity 150ms ease, background-color 150ms ease; }
 }
 
-.row:hover .replyBtn { opacity: .7; }
-.replyBtn:hover { opacity: 1 !important; background: var(--hover-tint); }
+.row:hover .actionBtn { opacity: .7; }
+.actionBtn:hover { opacity: 1 !important; background: var(--hover-tint); }

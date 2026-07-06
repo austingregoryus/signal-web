@@ -56,6 +56,26 @@ export class SignalClient {
     return { timestamp: json?.timestamp ?? 0 }
   }
 
+  /**
+   * Edit a previously-sent message. signal-cli implements editing as a `/v2/send`
+   * call carrying the new text plus the original message's timestamp as
+   * `edit_timestamp`. Only your own outgoing messages can be edited.
+   */
+  async editMessage(input: {
+    recipient?: string
+    groupId?: string
+    targetTimestamp: number
+    message: string
+  }): Promise<void> {
+    const recipients = input.groupId ? [input.groupId] : (input.recipient ? [input.recipient] : [])
+    await this.post('/v2/send', {
+      number: this.opts.number,
+      recipients,
+      message: input.message,
+      edit_timestamp: input.targetTimestamp,
+    }, 'edit')
+  }
+
   async sendReaction(input: {
     recipient?: string
     groupId?: string

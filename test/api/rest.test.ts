@@ -21,6 +21,7 @@ const stubClient = {
   sendReaction: async () => {},
   sendTyping: async () => {},
   sendReceipt: async () => {},
+  editMessage: async (i: unknown) => { sendCalls.push(i) },
   resolveUuid: async (number: string) => uuidByNumber[number] ?? null,
 }
 
@@ -144,6 +145,24 @@ describe('REST API', () => {
     // The local copy records the quote so the sender's view renders it.
     const stored = store.messages.listByConversation('c1', 10).find((m) => m.direction === 'out' && m.body === 'a reply')
     expect(stored).toMatchObject({ quoteAuthorId: 'alice-uuid', quoteTimestamp: 9999 })
+  })
+
+  it('edits an own message via signal-cli and applies the edit locally', async () => {
+    const { session, csrf } = await login()
+    // Seed an outgoing message owned by selfId to edit.
+    store.messages.upsert({ conversationId: 'c1', authorId: 'self', timestamp: 5000, direction: 'out', body: 'original', receivedAt: 1 })
+    const res = await app.inject({
+      method: 'POST', url: '/api/edit',
+      cookies: { sw_session: session, sw_csrf: csrf }, headers: { 'x-csrf-token': csrf },
+      payload: { conversationId: 'c1', type: 'dm', targetTimestamp: 5000, message: 'edited text' },
+    })
+    expect(res.statusCode).toBe(200)
+    // signal-cli got the edit (recipient + target timestamp + new text).
+    expect(sendCalls[0]).toMatchObject({ recipient: 'c1', targetTimestamp: 5000, message: 'edited text' })
+    // The local copy reflects the edit + an edited_timestamp marker.
+    const stored = store.messages.listByConversation('c1', 10).find((m) => m.timestamp === 5000)
+    expect(stored).toMatchObject({ body: 'edited text' })
+    expect(stored?.editedTimestamp).not.toBeNull()
   })
 
   it('persists sent attachments locally and forwards bare base64 to signal-cli', async () => {

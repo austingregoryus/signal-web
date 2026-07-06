@@ -4,11 +4,12 @@ import { Attachment } from './Attachment'
 import styles from './Message.module.css'
 
 export function Message({
-  m, onReact, onReply, quoteOf, compact,
+  m, onReact, onReply, onEdit, quoteOf, compact,
 }: {
   m: Msg
   onReact?: (emoji: string) => void
   onReply?: (m: Msg) => void
+  onEdit?: (m: Msg) => void
   quoteOf?: (authorId: string, timestamp: number) => Msg | undefined
   compact?: boolean
 }): React.JSX.Element {
@@ -17,6 +18,8 @@ export function Message({
   const quoted = m.quoteAuthorId != null && m.quoteTimestamp != null
     ? quoteOf?.(m.quoteAuthorId, m.quoteTimestamp)
     : undefined
+  // Only your own outgoing, non-deleted, text-bearing messages are editable.
+  const canEdit = m.direction === 'out' && !m.deleted && m.body != null && m.body !== ''
   return (
     <div className={`${styles.row} ${m.direction === 'out' ? styles.out : styles.in} ${compact ? styles.compact : ''}`}>
       <div className={styles.bubble}>
@@ -40,9 +43,14 @@ export function Message({
           <Reactions reactions={m.reactions} onReact={onReact} align={m.direction === 'out' ? 'end' : 'start'} />
         ) : null}
       </div>
-      {onReply && !m.deleted ? (
-        <button className={styles.replyBtn} onClick={() => onReply(m)} aria-label="Reply" title="Reply">↩</button>
-      ) : null}
+      <div className={styles.actions}>
+        {onReply && !m.deleted ? (
+          <button className={styles.actionBtn} onClick={() => onReply(m)} aria-label="Reply" title="Reply">↩</button>
+        ) : null}
+        {onEdit && canEdit ? (
+          <button className={styles.actionBtn} onClick={() => onEdit(m)} aria-label="Edit" title="Edit">✎</button>
+        ) : null}
+      </div>
     </div>
   )
 }

@@ -17,6 +17,7 @@ export function Chat(): React.JSX.Element {
   const [typing, setTyping] = useState(false)
   const [showNew, setShowNew] = useState(false)
   const [replyTo, setReplyTo] = useState<Message | null>(null)
+  const [editing, setEditing] = useState<Message | null>(null)
   const [pendingDelete, setPendingDelete] = useState<Conversation | null>(null)
   const typingTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
   const lastSeenRef = useRef(0)
@@ -90,6 +91,18 @@ export function Chat(): React.JSX.Element {
     await loadConversations()
   }, [selected, loadConversations])
 
+  const onSubmitEdit = useCallback(async (timestamp: number, text: string) => {
+    if (!selected) return
+    const conv = conversations.find((c) => c.id === selected)
+    await api.post('/api/edit', {
+      conversationId: selected,
+      type: conv?.type ?? 'dm',
+      targetTimestamp: timestamp,
+      message: text,
+    })
+    await loadThread(selected)
+  }, [selected, conversations, loadThread])
+
   const onReact = useCallback(async (m: Message, emoji: string) => {
     if (!selected) return
     const conv = conversations.find((c) => c.id === selected)
@@ -147,8 +160,21 @@ export function Chat(): React.JSX.Element {
               </span>
               <span className={styles.threadName}>{selectedConv?.displayName ?? selectedConv?.id ?? selected}</span>
             </div>
-            <Thread messages={messages} onReact={onReact} onReply={setReplyTo} typing={typing} />
-            <Composer onSend={onSend} replyTo={replyTo} onCancelReply={() => setReplyTo(null)} />
+            <Thread
+              messages={messages}
+              onReact={onReact}
+              onReply={(m) => { setReplyTo(m); setEditing(null) }}
+              onEdit={(m) => { setEditing(m); setReplyTo(null) }}
+              typing={typing}
+            />
+            <Composer
+              onSend={onSend}
+              replyTo={replyTo}
+              onCancelReply={() => setReplyTo(null)}
+              editing={editing}
+              onSubmitEdit={onSubmitEdit}
+              onCancelEdit={() => setEditing(null)}
+            />
           </>
         ) : (
           <div className={styles.empty}>Select a conversation</div>

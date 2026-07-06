@@ -7,6 +7,7 @@ interface SendCapableClient {
   sendReaction(input: { recipient?: string; groupId?: string; reaction: string; targetAuthor: string; targetTimestamp: number; remove?: boolean }): Promise<void>
   sendTyping(input: { recipient?: string; groupId?: string; stop?: boolean }): Promise<void>
   sendReceipt(input: { recipient: string; targetTimestamp: number; type: 'read' | 'viewed' }): Promise<void>
+  editMessage(input: { recipient?: string; groupId?: string; targetTimestamp: number; message: string }): Promise<void>
   resolveUuid?(number: string): Promise<string | null>
 }
 
@@ -102,6 +103,27 @@ export function registerRestApi(app: FastifyInstance, deps: RestDeps): void {
       }
       store.conversations.touch(conversationId, ts)
       return reply.send({ ok: true, timestamp: ts })
+    },
+  )
+
+  // Edit one of the user's own previously-sent messages. signal-cli implements
+  // editing as a /v2/send carrying the new text + the original timestamp, then
+  // applies the edit locally so the sender's view updates immediately.
+  app.post<{ Body: { conversationId: string; type?: 'dm' | 'group'; targetTimestamp: number; message: string } }>(
+    '/api/edit',
+    auth,
+    async (req, reply) => {
+      const { type, targetTimestamp, message } = req.body
+      const conversationId = type === 'group' ? req.body.conversationId : store.conversations.resolveAlias(req.body.conversationId)
+      await client.editMessage(
+        type === 'group'
+          ? { groupId: conversationId, targetTimestamp, message }
+          : { recipient: conversationId, targetTimestamp, message },
+      )
+      // applyEdit only updates a non-deleted message owned by selfId; safe no-op
+      // if the target doesn't exist or isn't ours.
+      store.messages.applyEdit(selfId, targetTimestamp, message, Date.now())
+      return reply.send({ ok: true })
     },
   )
 

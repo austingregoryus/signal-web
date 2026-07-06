@@ -31,4 +31,19 @@ describe('Message', () => {
     render(<Message m={deleted} onReply={vi.fn()} />)
     expect(screen.queryByRole('button', { name: /reply/i })).toBeNull()
   })
+
+  it('shows an edit button only on own outgoing text messages', () => {
+    const onEdit = vi.fn()
+    // Inbound message: no edit button.
+    const { rerender } = render(<Message m={base} onEdit={onEdit} />)
+    expect(screen.queryByRole('button', { name: /edit/i })).toBeNull()
+    // Outgoing text message: edit button present and fires onEdit.
+    const outgoing = { ...base, direction: 'out' as const, body: 'my msg' }
+    rerender(<Message m={outgoing} onEdit={onEdit} />)
+    fireEvent.click(screen.getByRole('button', { name: /edit/i }))
+    expect(onEdit).toHaveBeenCalledWith(outgoing)
+    // Outgoing but empty/deleted: no edit button.
+    rerender(<Message m={{ ...outgoing, body: '' }} onEdit={onEdit} />)
+    expect(screen.queryByRole('button', { name: /edit/i })).toBeNull()
+  })
 })

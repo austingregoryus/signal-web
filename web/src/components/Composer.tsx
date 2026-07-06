@@ -4,17 +4,21 @@ import { EmojiPicker } from './EmojiPicker'
 import styles from './Composer.module.css'
 
 export function Composer({
-  onSend, replyTo, onCancelReply,
+  onSend, replyTo, onCancelReply, editing, onSubmitEdit, onCancelEdit,
 }: {
   onSend: (text: string, base64Attachments?: string[], quote?: { authorId: string; timestamp: number }) => void | Promise<void>
   replyTo?: Msg | null
   onCancelReply?: () => void
+  editing?: Msg | null
+  onSubmitEdit?: (timestamp: number, text: string) => void | Promise<void>
+  onCancelEdit?: () => void
 }): React.JSX.Element {
   const [text, setText] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [showEmoji, setShowEmoji] = useState(false)
   const fileInputRef = useRef<HTMLInputElement | null>(null)
   const textareaRef = useRef<HTMLTextAreaElement | null>(null)
+  const isEditing = Boolean(editing)
 
   // When a reply target is set, focus the textarea so the user can type
   // immediately; clear it when the reply is cancelled or sent.
@@ -22,21 +26,37 @@ export function Composer({
     if (replyTo) textareaRef.current?.focus()
   }, [replyTo])
 
+  // Edit mode: pre-fill the textarea with the message being edited and focus it.
+  useEffect(() => {
+    if (editing) {
+      setText(editing.body ?? '')
+      textareaRef.current?.focus()
+    }
+  }, [editing])
+
   async function send(): Promise<void> {
     const t = text.trim()
     if (!t) return
-    const quote = replyTo ? { authorId: replyTo.authorId, timestamp: replyTo.timestamp } : undefined
     try {
-      await onSend(t, undefined, quote)
-      setText('')
-      setError(null)
-      if (quote) onCancelReply?.()
+      if (isEditing && editing && onSubmitEdit) {
+        await onSubmitEdit(editing.timestamp, t)
+        setText('')
+        setError(null)
+        onCancelEdit?.()
+      } else {
+        const quote = replyTo ? { authorId: replyTo.authorId, timestamp: replyTo.timestamp } : undefined
+        await onSend(t, undefined, quote)
+        setText('')
+        setError(null)
+        if (quote) onCancelReply?.()
+      }
     } catch {
-      setError("Couldn't send — try again")
+      setError(isEditing ? "Couldn't save — try again" : "Couldn't send — try again")
     }
   }
   function onKey(e: KeyboardEvent): void {
     if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); void send() }
+    if (isEditing && e.key === 'Escape') { e.preventDefault(); onCancelEdit?.() }
   }
   function onAttachClick(): void {
     fileInputRef.current?.click()
@@ -79,9 +99,18 @@ export function Composer({
     reader.readAsDataURL(file)
     e.target.value = ''
   }
+  // Attach/emoji are disabled in edit mode — Signal edits are text-only.
   return (
     <div className={styles.bar}>
-      {replyTo ? (
+      {editing ? (
+        <div className={styles.replyBar}>
+          <span className={styles.replyQuote}>
+            <span className={styles.replyLabel}>Editing message</span>
+            <span className={styles.replyText}>{editing.body ?? 'Message'}</span>
+          </span>
+          <button type="button" className={styles.replyCancel} aria-label="Cancel edit" onClick={onCancelEdit}>×</button>
+        </div>
+      ) : replyTo ? (
         <div className={styles.replyBar}>
           <span className={styles.replyQuote}>
             <span className={styles.replyLabel}>Replying to</span>
@@ -90,13 +119,14 @@ export function Composer({
           <button type="button" className={styles.replyCancel} aria-label="Cancel reply" onClick={onCancelReply}>×</button>
         </div>
       ) : null}
-      <button className={styles.attach} onClick={onAttachClick} aria-label="Attach file">📎</button>
+      <button className={styles.attach} onClick={onAttachClick} aria-label="Attach file" disabled={isEditing}>📎</button>
       <input
         ref={fileInputRef}
         className={styles.fileInput}
         type="file"
         aria-label="Attachment file"
         onChange={onFileChange}
+        disabled={isEditing}
       />
       <button
         className={styles.emoji}
@@ -109,12 +139,16 @@ export function Composer({
       </button>
       <textarea
         ref={textareaRef}
-        className={styles.box} rows={1} placeholder="Message" aria-label="Message"
+        className={styles.box} rows={1}
+        placeholder={isEditing ? 'Edit message…' : 'Message'}
+        aria-label="Message"
         value={text} onChange={(e) => setText(e.target.value)} onKeyDown={onKey}
       />
-      <button className={styles.send} onClick={() => void send()} aria-label="Send">➤</button>
+      <button className={styles.send} onClick={() => void send()} aria-label={isEditing ? 'Save edit' : 'Send'}>
+        {isEditing ? '✓' : '➤'}
+      </button>
       {error && <span role="alert" className={styles.error}>{error}</span>}
-      {showEmoji ? (
+      {showEmoji && !isEditing ? (
         <EmojiPicker onPick={onEmoji} onClose={() => setShowEmoji(false)} />
       ) : null}
     </div>
