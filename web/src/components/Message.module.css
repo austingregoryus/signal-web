@@ -69,8 +69,11 @@
 
 .edited { opacity: .85; font-style: italic; }
 .deleted { opacity: .6; font-style: italic; }
-.tick { opacity: .6; }
-.read { opacity: .9; color: #3b82f6; }
+/* Receipt labels (Sent/Delivered/Read) appear only on outbound bubbles, which
+   use the blue accent gradient — so they need full opacity to read on the
+   colored background. The parent .meta is dimmed (.65), so override it here. */
+.tick { opacity: 1; }
+.read { opacity: 1; font-weight: 700; }
 
 /* Quoted-message preview rendered at the top of a reply bubble. */
 .quote {

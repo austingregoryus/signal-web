@@ -56,9 +56,9 @@ export function Message({
         <span className={styles.meta}>
           {m.editedTimestamp && !m.deleted ? <span className={styles.edited}>edited · </span> : null}
           {time}
-          {receiptState === 'sent' ? <span className={styles.tick}> · ✓</span> : null}
-          {receiptState === 'delivered' ? <span className={styles.tick}> · ✓✓</span> : null}
-          {receiptState === 'read' ? <span className={styles.read}> · ✓✓</span> : null}
+          {receiptState === 'sent' ? <span className={styles.tick}> · Sent</span> : null}
+          {receiptState === 'delivered' ? <span className={styles.tick}> · Delivered</span> : null}
+          {receiptState === 'read' ? <span className={styles.read}> · Read</span> : null}
         </span>
         {onReact ? (
           <Reactions reactions={m.reactions} onReact={onReact} align={m.direction === 'out' ? 'end' : 'start'} />
