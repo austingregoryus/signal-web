@@ -23,6 +23,8 @@ const stubClient = {
   sendReceipt: async () => {},
   editMessage: async (i: unknown) => { sendCalls.push(i) },
   resolveUuid: async (number: string) => uuidByNumber[number] ?? null,
+  getGroup: async () => ({ name: 'Test Group', description: '', members: ['+15550000001', '+15550000002'], admins: ['+15550000001'] }),
+  updateGroup: async () => {},
 }
 
 beforeEach(async () => {
@@ -276,5 +278,67 @@ describe('REST API', () => {
     expect(res.json().error).toBe('empty_message')
     // signal-cli was never called.
     expect(sendCalls).toHaveLength(0)
+  })
+
+  it('returns group info with members resolved to display names', async () => {
+    const { session } = await login()
+    store.conversations.ensure({ id: 'g1', type: 'group', displayName: 'Test Group' })
+    // Seed a named conversation for one member so the resolver finds a name.
+    store.conversations.ensure({ id: 'uuid-alice', type: 'dm', displayName: 'Alice' })
+    store.conversations.linkAlias('+15550000001', 'uuid-alice')
+    const res = await app.inject({
+      method: 'GET', url: '/api/conversations/g1/info',
+      cookies: { sw_session: session },
+    })
+    expect(res.statusCode).toBe(200)
+    const body = res.json()
+    expect(body.type).toBe('group')
+    expect(body.name).toBe('Test Group')
+    const alice = body.members.find((m: { number: string }) => m.number === '+15550000001')
+    expect(alice).toMatchObject({ number: '+15550000001', displayName: 'Alice', isAdmin: true })
+    const bob = body.members.find((m: { number: string }) => m.number === '+15550000002')
+    expect(bob.displayName).toBeNull() // unknown -> bare number, no name
+  })
+
+  it('returns DM info with just the display name', async () => {
+    const { session } = await login()
+    const res = await app.inject({
+      method: 'GET', url: '/api/conversations/c1/info',
+      cookies: { sw_session: session },
+    })
+    expect(res.statusCode).toBe(200)
+    expect(res.json()).toMatchObject({ type: 'dm', displayName: 'Alice' })
+  })
+
+  it('renames a DM locally and a group via signal-cli + locally', async () => {
+    const { session, csrf } = await login()
+    // DM rename — local only.
+    const dm = await app.inject({
+      method: 'POST', url: '/api/conversations/c1/rename',
+      cookies: { sw_session: session, sw_csrf: csrf }, headers: { 'x-csrf-token': csrf },
+      payload: { name: 'Alice Renamed' },
+    })
+    expect(dm.statusCode).toBe(200)
+    expect(store.conversations.list().find((c) => c.id === 'c1')?.displayName).toBe('Alice Renamed')
+
+    // Group rename — signal-cli updateGroup + local.
+    store.conversations.ensure({ id: 'g1', type: 'group', displayName: 'Old Group Name' })
+    const grp = await app.inject({
+      method: 'POST', url: '/api/conversations/g1/rename',
+      cookies: { sw_session: session, sw_csrf: csrf }, headers: { 'x-csrf-token': csrf },
+      payload: { name: 'New Group Name' },
+    })
+    expect(grp.statusCode).toBe(200)
+    expect(store.conversations.list().find((c) => c.id === 'g1')?.displayName).toBe('New Group Name')
+  })
+
+  it('rejects a rename with an empty name', async () => {
+    const { session, csrf } = await login()
+    const res = await app.inject({
+      method: 'POST', url: '/api/conversations/c1/rename',
+      cookies: { sw_session: session, sw_csrf: csrf }, headers: { 'x-csrf-token': csrf },
+      payload: { name: '   ' },
+    })
+    expect(res.statusCode).toBe(400)
   })
 })

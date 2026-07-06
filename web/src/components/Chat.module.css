@@ -115,6 +115,28 @@
   white-space: nowrap;
 }
 
+.infoBtn {
+  margin-left: auto;
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  font-size: 1.15rem;
+  line-height: 1;
+  cursor: pointer;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .infoBtn { transition: background-color 150ms ease, color 150ms ease; }
+}
+
+.infoBtn:hover { background: var(--hover-tint); color: var(--fg); }
+
 @media (max-width: 640px) {
   .layout { grid-template-columns: 1fr; }
   .sidebar { display: flex; }

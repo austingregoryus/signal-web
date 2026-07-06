@@ -84,6 +84,26 @@ export class ConversationRepo {
   }
 
   /**
+   * Look up the display name for a contact identifier (number or uuid),
+   * resolving any alias first. Returns null if no named conversation exists.
+   * Used to render group member lists with names instead of bare numbers.
+   */
+  displayNameFor(identifier: string): string | null {
+    const id = this.resolveAlias(identifier)
+    const row = this.db
+      .prepare('SELECT display_name FROM conversations WHERE id = ?')
+      .get(id) as { display_name: string | null } | undefined
+    return row?.display_name ?? null
+  }
+
+  /** Update a conversation's local display name (DM rename). */
+  rename(id: string, displayName: string): void {
+    this.db
+      .prepare('UPDATE conversations SET display_name = ? WHERE id = ?')
+      .run(displayName, id)
+  }
+
+  /**
    * Fold the obsolete conversation into the canonical one: repoint its messages,
    * coalesce display_name (keep whichever side has a name), and delete the
    * obsolete row. Idempotent — a no-op if obsoleteId no longer exists.

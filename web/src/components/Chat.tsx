@@ -7,6 +7,7 @@ import { Thread } from './Thread'
 import { Composer } from './Composer'
 import { NewConversation } from './NewConversation'
 import { ConfirmDialog } from './ConfirmDialog'
+import { ConversationInfo } from './ConversationInfo'
 import { avatarColor, initials } from './avatar'
 import styles from './Chat.module.css'
 
@@ -19,6 +20,7 @@ export function Chat(): React.JSX.Element {
   const [replyTo, setReplyTo] = useState<Message | null>(null)
   const [editing, setEditing] = useState<Message | null>(null)
   const [pendingDelete, setPendingDelete] = useState<Conversation | null>(null)
+  const [showInfo, setShowInfo] = useState(false)
   const typingTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
   const lastSeenRef = useRef(0)
 
@@ -72,6 +74,7 @@ export function Chat(): React.JSX.Element {
 
   useEffect(() => { void loadConversations() }, [loadConversations])
   useEffect(() => { if (selected) void loadThread(selected) }, [selected, loadThread])
+  useEffect(() => { setShowInfo(false); setReplyTo(null); setEditing(null) }, [selected])
 
   useEffect(() => {
     if ('Notification' in window && Notification.permission === 'default') {
@@ -193,6 +196,14 @@ export function Chat(): React.JSX.Element {
                 {initials(selectedConv?.displayName ?? null)}
               </span>
               <span className={styles.threadName}>{selectedConv?.displayName ?? selectedConv?.id ?? selected}</span>
+              <button
+                className={styles.infoBtn}
+                onClick={() => setShowInfo(true)}
+                aria-label="Conversation info"
+                title="Info"
+              >
+                ⓘ
+              </button>
             </div>
             <Thread
               messages={messages}
@@ -243,6 +254,14 @@ export function Chat(): React.JSX.Element {
             void onDelete(conv)
           }}
           onCancel={() => setPendingDelete(null)}
+        />
+      ) : null}
+      {showInfo && selected ? (
+        <ConversationInfo
+          conversationId={selected}
+          initialName={selectedConv?.displayName ?? null}
+          onClose={() => setShowInfo(false)}
+          onRenamed={() => { void loadConversations() }}
         />
       ) : null}
     </div>

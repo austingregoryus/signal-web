@@ -10,6 +10,8 @@ interface SendCapableClient {
   sendReceipt(input: { recipient: string; targetTimestamp: number; type: 'read' | 'viewed' }): Promise<void>
   editMessage(input: { recipient?: string; groupId?: string; targetTimestamp: number; message: string }): Promise<void>
   resolveUuid?(number: string): Promise<string | null>
+  getGroup?(groupId: string): Promise<{ name: string; description: string; members: string[]; admins: string[] }>
+  updateGroup?(groupId: string, input: { name?: string; description?: string }): Promise<void>
 }
 
 export interface RestDeps {
@@ -65,6 +67,58 @@ export function registerRestApi(app: FastifyInstance, deps: RestDeps): void {
       const id = store.conversations.resolveAlias(req.params.id)
       const attachmentIds = store.conversations.remove(id)
       await Promise.all(attachmentIds.map((aid) => blobs.delete(aid)))
+      return reply.send({ ok: true })
+    },
+  )
+
+  // Conversation info — for groups: full member list (numbers resolved to names
+  // via the contacts/conversations store) + name/description. For DMs: just the
+  // local display name. Powers the info panel + rename affordance.
+  app.get<{ Params: { id: string } }>(
+    '/api/conversations/:id/info',
+    auth,
+    async (req, reply) => {
+      const id = store.conversations.resolveAlias(req.params.id)
+      const conv = store.conversations.list().find((c) => c.id === id)
+      if (!conv) return reply.code(404).send({ error: 'not_found' })
+      if (conv.type === 'group' && client.getGroup) {
+        try {
+          const g = await client.getGroup(id)
+          const admins = new Set(g.admins)
+          // Resolve each member number to a display name where we have one.
+          const members = g.members.map((number) => ({
+            number,
+            displayName: store.conversations.displayNameFor(number),
+            isAdmin: admins.has(number),
+          }))
+          return reply.send({ type: 'group', displayName: conv.displayName, name: g.name, description: g.description, members })
+        } catch {
+          // signal-cli lookup failed — fall back to local info only.
+        }
+      }
+      return reply.send({ type: conv.type, displayName: conv.displayName })
+    },
+  )
+
+  // Rename a conversation. Groups: signal-cli PUT propagates to all members,
+  // then update the local name. DMs: local display name only (a contact's
+  // canonical name on Signal can't be changed from here).
+  app.post<{ Params: { id: string }; Body: { name: string } }>(
+    '/api/conversations/:id/rename',
+    auth,
+    async (req, reply) => {
+      const name = req.body.name?.trim()
+      if (!name) return reply.code(400).send({ error: 'invalid_name' })
+      const id = store.conversations.resolveAlias(req.params.id)
+      const conv = store.conversations.list().find((c) => c.id === id)
+      if (!conv) return reply.code(404).send({ error: 'not_found' })
+      if (conv.type === 'group') {
+        if (!client.updateGroup) return reply.code(501).send({ error: 'not_supported' })
+        try { await client.updateGroup(id, { name }) } catch {
+          return reply.code(502).send({ error: 'rename_failed' })
+        }
+      }
+      store.conversations.rename(id, name)
       return reply.send({ ok: true })
     },
   )

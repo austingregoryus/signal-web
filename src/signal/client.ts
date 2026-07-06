@@ -22,6 +22,13 @@ export interface Contact {
   profileName?: string
 }
 
+export interface GroupInfo {
+  name: string
+  description: string
+  members: string[]
+  admins: string[]
+}
+
 export class SignalClient {
   private readonly fetchImpl: typeof fetch
   constructor(private readonly opts: SignalClientOptions) {
@@ -152,6 +159,40 @@ export class SignalClient {
     const res = await this.fetchImpl(this.url(`/v1/groups/${encodeURIComponent(this.opts.number)}`))
     if (!res.ok) throw new Error(`groups failed: ${res.status}`)
     return (await res.json()) as Array<{ id: string; name?: string }>
+  }
+
+  /**
+   * Fetch full info for one group, including the member list. The id is the
+   * conversation's stored (raw) group id; it's converted to the prefixed form
+   * signal-cli's REST API expects.
+   */
+  async getGroup(groupId: string): Promise<GroupInfo> {
+    const sendId = toSendGroupId(groupId)
+    const res = await this.fetchImpl(this.url(`/v1/groups/${encodeURIComponent(this.opts.number)}/${encodeURIComponent(sendId)}`))
+    if (!res.ok) throw new Error(`group info failed: ${res.status}`)
+    const data = (await res.json()) as {
+      name?: string
+      description?: string
+      members?: string[]
+      admins?: string[]
+    }
+    return {
+      name: data.name ?? '',
+      description: data.description ?? '',
+      members: data.members ?? [],
+      admins: data.admins ?? [],
+    }
+  }
+
+  /** Rename a group. Propagates to all members via Signal. */
+  async updateGroup(groupId: string, input: { name?: string; description?: string }): Promise<void> {
+    const sendId = toSendGroupId(groupId)
+    const res = await this.fetchImpl(this.url(`/v1/groups/${encodeURIComponent(this.opts.number)}/${encodeURIComponent(sendId)}`), {
+      method: 'PUT',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(input),
+    })
+    if (!res.ok) throw new Error(`group update failed: ${res.status}`)
   }
 
   async getLinkingQr(deviceName: string): Promise<{ contentType: string; bytes: Buffer }> {
