@@ -84,6 +84,22 @@ describe('REST API', () => {
     expect(res.json().messages[0].body).toBe('hi')
   })
 
+  it('pages older messages with a before cursor (newest-first per page)', async () => {
+    const { session } = await login()
+    // Seed 4 more messages at ts 1001..1004; the fixture already has 'hi' at ts 1000.
+    for (let i = 1; i <= 4; i++) {
+      store.messages.upsert({ conversationId: 'c1', authorId: 'a', timestamp: 1000 + i, direction: 'in', body: `m${i}`, receivedAt: i })
+    }
+    // First page (limit 2): newest two messages.
+    const p1 = await app.inject({ method: 'GET', url: '/api/conversations/c1/messages?limit=2', cookies: { sw_session: session } })
+    const p1bodies = p1.json().messages.map((m: { body: string }) => m.body)
+    expect(p1bodies).toEqual(['m4', 'm3']) // newest-first
+    // Second page: messages strictly older than the oldest in page 1 (ts=1003).
+    const p2 = await app.inject({ method: 'GET', url: '/api/conversations/c1/messages?limit=2&before=1003', cookies: { sw_session: session } })
+    const p2bodies = p2.json().messages.map((m: { body: string }) => m.body)
+    expect(p2bodies).toEqual(['m2', 'm1']) // ts 1002, 1001
+  })
+
   it('deletes a conversation and cascades to its messages, reactions, receipts, attachments', async () => {
     const { session, csrf } = await login()
     // Seed a second conversation with a message, a reaction, a receipt, an attachment.

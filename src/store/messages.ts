@@ -86,13 +86,21 @@ export class MessageRepo {
       })
   }
 
-  listByConversation(conversationId: string, limit: number): StoredMessage[] {
-    const rows = this.db
-      .prepare(
-        `SELECT * FROM messages WHERE conversation_id = ?
-         ORDER BY timestamp DESC LIMIT ?`,
-      )
-      .all(conversationId, limit) as Row[]
+  /**
+   * List messages for a conversation, newest-first. Pass `beforeTimestamp` to
+   * page: returns messages strictly older than that cursor (exclusive), which
+   * lets the client load the newest N first, then fetch older batches as the
+   * user scrolls up. Omit it for the initial newest-first page.
+   */
+  listByConversation(conversationId: string, limit: number, beforeTimestamp?: number): StoredMessage[] {
+    const sql = beforeTimestamp != null
+      ? `SELECT * FROM messages WHERE conversation_id = ? AND timestamp < ?
+         ORDER BY timestamp DESC LIMIT ?`
+      : `SELECT * FROM messages WHERE conversation_id = ?
+         ORDER BY timestamp DESC LIMIT ?`
+    const rows = (beforeTimestamp != null
+      ? this.db.prepare(sql).all(conversationId, beforeTimestamp, limit)
+      : this.db.prepare(sql).all(conversationId, limit)) as Row[]
     return rows.map(toStored)
   }
 

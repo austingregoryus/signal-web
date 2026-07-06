@@ -29,12 +29,45 @@ export function Chat(): React.JSX.Element {
       if (c.lastActivity > lastSeenRef.current) lastSeenRef.current = c.lastActivity
     }
   }, [])
+  const PAGE = 50
+  const [hasMore, setHasMore] = useState(true)
+  const [loadingMore, setLoadingMore] = useState(false)
   const loadThread = useCallback(async (id: string) => {
-    const res = await api.get<{ messages: Message[] }>(`/api/conversations/${encodeURIComponent(id)}/messages?limit=200`)
-    setMessages([...res.messages].reverse()) // API returns newest-first; show oldest-first
+    // Initial load: newest PAGE messages, oldest-first for display.
+    const res = await api.get<{ messages: Message[] }>(`/api/conversations/${encodeURIComponent(id)}/messages?limit=${PAGE}`)
+    const oldestFirst = [...res.messages].reverse()
+    setMessages(oldestFirst)
+    setHasMore(res.messages.length === PAGE) // a full page means there may be more
     for (const m of res.messages) {
       if (m.timestamp > lastSeenRef.current) lastSeenRef.current = m.timestamp
     }
+  }, [])
+  const loadMore = useCallback(async (id: string, beforeTimestamp: number): Promise<Message[]> => {
+    // Fetch the next older page; returns the new messages so the caller can
+    // preserve scroll position after prepending. newest-first from the API.
+    setLoadingMore(true)
+    try {
+      const res = await api.get<{ messages: Message[] }>(`/api/conversations/${encodeURIComponent(id)}/messages?limit=${PAGE}&before=${beforeTimestamp}`)
+      setHasMore(res.messages.length === PAGE)
+      const oldestFirst = [...res.messages].reverse()
+      setMessages((prev) => [...oldestFirst, ...prev])
+      return oldestFirst
+    } finally {
+      setLoadingMore(false)
+    }
+  }, [])
+  // Refresh just the newest page on a live event — append only genuinely new
+  // messages (deduped by authorId+timestamp) so the user's scroll position and
+  // already-loaded older messages are preserved. Replaces the full-reload that
+  // would otherwise wipe pagination state.
+  const refreshTail = useCallback(async (id: string) => {
+    const res = await api.get<{ messages: Message[] }>(`/api/conversations/${encodeURIComponent(id)}/messages?limit=${PAGE}`)
+    const newest = [...res.messages].reverse() // oldest-first
+    setMessages((prev) => {
+      const seen = new Set(prev.map((m) => `${m.authorId}:${m.timestamp}`))
+      const fresh = newest.filter((m) => !seen.has(`${m.authorId}:${m.timestamp}`))
+      return fresh.length > 0 ? [...prev, ...fresh] : prev
+    })
   }, [])
 
   useEffect(() => { void loadConversations() }, [loadConversations])
@@ -49,7 +82,8 @@ export function Chat(): React.JSX.Element {
   useLiveSocket((ev) => {
     if (ev.type === 'message' || ev.type === 'receipt') {
       void loadConversations()
-      if (selected) void loadThread(selected)
+      // Append only genuinely new messages; preserve pagination + scroll.
+      if (selected) void refreshTail(selected)
       if (
         ev.type === 'message' &&
         ev.message === undefined &&
@@ -81,9 +115,9 @@ export function Chat(): React.JSX.Element {
       quoteAuthor: quote?.authorId,
     })
     if (quote) setReplyTo(null)
-    await loadThread(selected)
+    await refreshTail(selected)
     await loadConversations()
-  }, [selected, conversations, loadThread, loadConversations])
+  }, [selected, conversations, refreshTail, loadConversations])
 
   const onDelete = useCallback(async (conv: Conversation) => {
     await api.delete(`/api/conversations/${encodeURIComponent(conv.id)}`)
@@ -100,8 +134,8 @@ export function Chat(): React.JSX.Element {
       targetTimestamp: timestamp,
       message: text,
     })
-    await loadThread(selected)
-  }, [selected, conversations, loadThread])
+    await refreshTail(selected)
+  }, [selected, conversations, refreshTail])
 
   const onReact = useCallback(async (m: Message, emoji: string) => {
     if (!selected) return
@@ -113,8 +147,8 @@ export function Chat(): React.JSX.Element {
       targetTimestamp: m.timestamp,
       emoji,
     })
-    await loadThread(selected)
-  }, [selected, conversations, loadThread])
+    await refreshTail(selected)
+  }, [selected, conversations, refreshTail])
 
   const selectedConv = conversations.find((c) => c.id === selected) ?? null
   const showThreadOnMobile = Boolean(selected)
@@ -165,6 +199,9 @@ export function Chat(): React.JSX.Element {
               onReact={onReact}
               onReply={(m) => { setReplyTo(m); setEditing(null) }}
               onEdit={(m) => { setEditing(m); setReplyTo(null) }}
+              hasMore={hasMore}
+              loadingMore={loadingMore}
+              onLoadMore={selected ? (before) => loadMore(selected, before) : undefined}
               typing={typing}
             />
             <Composer

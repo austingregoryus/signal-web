@@ -36,13 +36,15 @@ export function registerRestApi(app: FastifyInstance, deps: RestDeps): void {
 
   app.get('/api/conversations', auth, async () => store.conversations.list())
 
-  app.get<{ Params: { id: string }; Querystring: { limit?: string } }>(
+  app.get<{ Params: { id: string }; Querystring: { limit?: string; before?: string } }>(
     '/api/conversations/:id/messages',
     auth,
     async (req) => {
-      const raw = Number(req.query.limit ?? 100)
-      const limit = Number.isFinite(raw) ? Math.max(1, Math.min(raw, 500)) : 100
-      const messages = store.messages.listByConversation(req.params.id, limit).map((m) => ({
+      const rawLimit = Number(req.query.limit ?? 50)
+      const limit = Number.isFinite(rawLimit) ? Math.max(1, Math.min(rawLimit, 500)) : 50
+      const beforeNum = Number(req.query.before ?? Number.NaN)
+      const before = Number.isFinite(beforeNum) ? beforeNum : undefined
+      const messages = store.messages.listByConversation(req.params.id, limit, before).map((m) => ({
         ...m,
         reactions: store.reactions.listForMessage(m.authorId, m.timestamp),
         receipts: store.receipts.listForMessage(m.authorId, m.timestamp),

@@ -8,6 +8,13 @@
   min-height: 0;
 }
 
+.loadingMore {
+  text-align: center;
+  color: var(--muted);
+  font-size: .82rem;
+  padding: 8px 0 4px;
+}
+
 .typingRow { display: flex; margin: 6px 16px; }
 
 .typingBubble {
