@@ -20,4 +20,12 @@ describe('ConversationList', () => {
     await userEvent.click(screen.getByText('Alice'))
     expect(onSelect).toHaveBeenCalledWith('alice-uuid')
   })
+  it('calls onDelete when the row delete button is clicked (not onSelect)', async () => {
+    const onSelect = vi.fn()
+    const onDelete = vi.fn()
+    render(<ConversationList conversations={convs} selectedId={null} onSelect={onSelect} onDelete={onDelete} />)
+    await userEvent.click(screen.getByRole('button', { name: /delete conversation with alice/i }))
+    expect(onDelete).toHaveBeenCalledWith(convs[0])
+    expect(onSelect).not.toHaveBeenCalled()
+  })
 })

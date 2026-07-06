@@ -51,6 +51,20 @@ export function registerRestApi(app: FastifyInstance, deps: RestDeps): void {
     },
   )
 
+  app.delete<{ Params: { id: string } }>(
+    '/api/conversations/:id',
+    auth,
+    async (req, reply) => {
+      // Cascade-clean messages/reactions/receipts/attachments (+ their blobs)
+      // and the conversation row. resolveAlias first so a stale number-id still
+      // deletes the right conversation.
+      const id = store.conversations.resolveAlias(req.params.id)
+      const attachmentIds = store.conversations.remove(id)
+      await Promise.all(attachmentIds.map((aid) => blobs.delete(aid)))
+      return reply.send({ ok: true })
+    },
+  )
+
   app.post<{ Body: { conversationId: string; type: 'dm' | 'group'; message?: string; base64Attachments?: string[]; quoteTimestamp?: number; quoteAuthor?: string } }>(
     '/api/send',
     auth,

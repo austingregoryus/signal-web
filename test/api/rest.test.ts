@@ -10,6 +10,7 @@ import { authPlugin } from '../../src/auth/plugin'
 import { registerRestApi } from '../../src/api/rest'
 
 let store: Store
+let blobs: AttachmentBlobStore
 let path: string
 let blobDir: string
 let app: FastifyInstance
@@ -28,6 +29,7 @@ beforeEach(async () => {
   for (const k of Object.keys(uuidByNumber)) delete uuidByNumber[k]
   path = join(tmpdir(), `swrest-${Date.now()}-${Math.round(performance.now())}.db`)
   blobDir = join(tmpdir(), `swrest-blobs-${Date.now()}-${Math.round(performance.now())}`)
+  blobs = new AttachmentBlobStore(blobDir, 'k')
   store = openStore(path, 'k')
   store.authConfig.setPasswordHash(await hashPassword('hunter2hunter2'))
   store.conversations.ensure({ id: 'c1', type: 'dm', displayName: 'Alice' })
@@ -40,7 +42,7 @@ beforeEach(async () => {
     webauthn: { rpId: 'localhost', rpName: 'x', origin: 'http://localhost' },
     secureCookies: false,
   })
-  registerRestApi(app, { store, client: stubClient as never, selfId: 'self', blobs: new AttachmentBlobStore(blobDir, 'k') })
+  registerRestApi(app, { store, client: stubClient as never, selfId: 'self', blobs })
   await app.ready()
 })
 afterEach(async () => {
@@ -79,6 +81,41 @@ describe('REST API', () => {
     const res = await app.inject({ method: 'GET', url: '/api/conversations/c1/messages?limit=10', cookies: { sw_session: session } })
     expect(res.statusCode).toBe(200)
     expect(res.json().messages[0].body).toBe('hi')
+  })
+
+  it('deletes a conversation and cascades to its messages, reactions, receipts, attachments', async () => {
+    const { session, csrf } = await login()
+    // Seed a second conversation with a message, a reaction, a receipt, an attachment.
+    store.conversations.ensure({ id: 'c2', type: 'dm' })
+    store.messages.upsert({ conversationId: 'c2', authorId: 'bob', timestamp: 1000, direction: 'in', body: 'hi', receivedAt: 1 })
+    store.reactions.apply({ targetAuthorId: 'bob', targetTimestamp: 1000, reactorId: 'self', emoji: '👍', timestamp: 1500 })
+    store.receipts.record({ targetAuthorId: 'bob', targetTimestamp: 1000, recipientId: 'self', type: 'read', timestamp: 1200 })
+    store.attachments.add({ id: 'self:1000:0', messageAuthorId: 'bob', messageTimestamp: 1000, contentType: 'image/png' })
+    await blobs.put('self:1000:0', Buffer.from('pngbytes'))
+
+    const res = await app.inject({
+      method: 'DELETE', url: '/api/conversations/c2',
+      cookies: { sw_session: session, sw_csrf: csrf }, headers: { 'x-csrf-token': csrf },
+    })
+    expect(res.statusCode).toBe(200)
+    // The conversation and all its data are gone.
+    expect(store.conversations.list().some((c) => c.id === 'c2')).toBe(false)
+    expect(store.messages.listByConversation('c2', 10)).toHaveLength(0)
+    expect(store.reactions.listForMessage('bob', 1000)).toHaveLength(0)
+    expect(store.receipts.listForMessage('bob', 1000)).toHaveLength(0)
+    expect(store.attachments.listForMessage('bob', 1000)).toHaveLength(0)
+    // The blob file was deleted too.
+    expect(await blobs.get('self:1000:0')).toBeNull()
+    // The unrelated c1 conversation is untouched.
+    expect(store.conversations.list().some((c) => c.id === 'c1')).toBe(true)
+  })
+
+  it('enforces CSRF on delete', async () => {
+    const { session } = await login()
+    const res = await app.inject({
+      method: 'DELETE', url: '/api/conversations/c1', cookies: { sw_session: session },
+    })
+    expect(res.statusCode).toBe(403)
   })
 
   it('sends a message via the client and stores it optimistically', async () => {

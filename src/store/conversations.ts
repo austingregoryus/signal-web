@@ -110,4 +110,51 @@ export class ConversationRepo {
       .run(obsolete.last_activity, canonicalId)
     this.db.prepare('DELETE FROM conversations WHERE id = ?').run(obsoleteId)
   }
+
+  /**
+   * Permanently delete a conversation and all of its data: messages, reactions,
+   * receipts, attachments (rows), and the conversation row itself. Returns the
+   * list of attachment ids so the caller can also delete their encrypted blobs.
+   * There are no SQL foreign keys / cascades in the schema, so this does the
+   * cleanup manually by joining through messages' (author_id, timestamp) pairs.
+   * Idempotent — a no-op if the conversation doesn't exist.
+   */
+  remove(id: string): string[] {
+    const exists = this.db.prepare('SELECT 1 FROM conversations WHERE id = ?').get(id)
+    if (!exists) return []
+    // Collect attachment ids BEFORE deleting their rows, so blobs can be cleared.
+    const attachmentIds = (
+      this.db
+        .prepare(
+          `SELECT a.id AS id FROM attachments a
+           JOIN messages m ON a.message_author_id = m.author_id AND a.message_timestamp = m.timestamp
+           WHERE m.conversation_id = ?`,
+        )
+        .all(id) as { id: string }[]
+    ).map((r) => r.id)
+    // Reactions + receipts key on (author_id, timestamp) like attachments.
+    this.db
+      .prepare(
+        `DELETE FROM reactions WHERE (target_author_id, target_timestamp) IN
+           (SELECT author_id, timestamp FROM messages WHERE conversation_id = ?)`,
+      )
+      .run(id)
+    this.db
+      .prepare(
+        `DELETE FROM receipts WHERE (target_author_id, target_timestamp) IN
+           (SELECT author_id, timestamp FROM messages WHERE conversation_id = ?)`,
+      )
+      .run(id)
+    this.db
+      .prepare(
+        `DELETE FROM attachments WHERE (message_author_id, message_timestamp) IN
+           (SELECT author_id, timestamp FROM messages WHERE conversation_id = ?)`,
+      )
+      .run(id)
+    this.db.prepare('DELETE FROM messages WHERE conversation_id = ?').run(id)
+    this.db.prepare('DELETE FROM conversations WHERE id = ?').run(id)
+    // Drop any alias pointing at this conversation so it isn't re-resolved.
+    this.db.prepare('DELETE FROM contact_aliases WHERE uuid = ? OR number = ?').run(id, id)
+    return attachmentIds
+  }
 }

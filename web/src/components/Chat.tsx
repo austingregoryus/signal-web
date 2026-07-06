@@ -6,6 +6,7 @@ import { ConversationList } from './ConversationList'
 import { Thread } from './Thread'
 import { Composer } from './Composer'
 import { NewConversation } from './NewConversation'
+import { ConfirmDialog } from './ConfirmDialog'
 import { avatarColor, initials } from './avatar'
 import styles from './Chat.module.css'
 
@@ -16,6 +17,7 @@ export function Chat(): React.JSX.Element {
   const [typing, setTyping] = useState(false)
   const [showNew, setShowNew] = useState(false)
   const [replyTo, setReplyTo] = useState<Message | null>(null)
+  const [pendingDelete, setPendingDelete] = useState<Conversation | null>(null)
   const typingTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
   const lastSeenRef = useRef(0)
 
@@ -82,6 +84,12 @@ export function Chat(): React.JSX.Element {
     await loadConversations()
   }, [selected, conversations, loadThread, loadConversations])
 
+  const onDelete = useCallback(async (conv: Conversation) => {
+    await api.delete(`/api/conversations/${encodeURIComponent(conv.id)}`)
+    if (selected === conv.id) setSelected(null)
+    await loadConversations()
+  }, [selected, loadConversations])
+
   const onReact = useCallback(async (m: Message, emoji: string) => {
     if (!selected) return
     const conv = conversations.find((c) => c.id === selected)
@@ -112,7 +120,12 @@ export function Chat(): React.JSX.Element {
             +
           </button>
         </div>
-        <ConversationList conversations={conversations} selectedId={selected} onSelect={setSelected} />
+        <ConversationList
+          conversations={conversations}
+          selectedId={selected}
+          onSelect={setSelected}
+          onDelete={setPendingDelete}
+        />
       </aside>
       <main className={styles.main}>
         {selected ? (
@@ -153,6 +166,20 @@ export function Chat(): React.JSX.Element {
             setSelected(conversationId)
             void loadConversations()
           }}
+        />
+      ) : null}
+      {pendingDelete ? (
+        <ConfirmDialog
+          title="Delete conversation?"
+          message={`This permanently removes "${pendingDelete.displayName ?? pendingDelete.id}" and all its messages from this device. The other person keeps their copy.`}
+          confirmLabel="Delete"
+          destructive
+          onConfirm={() => {
+            const conv = pendingDelete
+            setPendingDelete(null)
+            void onDelete(conv)
+          }}
+          onCancel={() => setPendingDelete(null)}
         />
       ) : null}
     </div>

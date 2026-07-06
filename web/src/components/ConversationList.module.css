@@ -1,10 +1,17 @@
 .list { list-style: none; margin: 0; padding: 8px; overflow-y: auto; flex: 1; min-height: 0; }
 
+.item {
+  display: flex;
+  align-items: center;
+  border-radius: 12px;
+}
+
 .row {
   display: flex;
   align-items: center;
   gap: 12px;
-  width: 100%;
+  flex: 1;
+  min-width: 0;
   padding: 12px 12px;
   border: 0;
   border-radius: 12px;
@@ -22,6 +29,30 @@
 .row:hover { background: var(--hover-tint); }
 .row:active { background: var(--active-tint); }
 .active { background: var(--active-tint); }
+
+/* Delete affordance: subtle until the row is hovered, then plain on touch. */
+.deleteBtn {
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  font-size: 1rem;
+  line-height: 1;
+  cursor: pointer;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  opacity: 0;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .deleteBtn { transition: opacity 150ms ease, background-color 150ms ease; }
+}
+
+.item:hover .deleteBtn { opacity: .7; }
+.deleteBtn:hover { opacity: 1 !important; background: var(--active-tint); }
 
 .avatar {
   width: 44px;
