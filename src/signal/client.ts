@@ -30,6 +30,21 @@ export class SignalClient {
     return `${this.opts.apiUrl}${path}`
   }
 
+  /**
+   * Convert a conversation's stored group id (the raw base64 form signal-cli
+   * delivers in inbound envelopes) into the form its /v2/send expects:
+   * `group.` + base64(<raw base64 string as UTF-8>). Non-group ids (UUIDs,
+   * phone numbers) and ids that are already prefixed pass through unchanged.
+   */
+  private toSendGroupId(id: string): string {
+    if (id.startsWith('group.')) return id
+    // Heuristic: group ids from inbound envelopes are base64-encoded binary
+    // (contain +, /, =, or a 32+ byte length). A bare UUID or E.164 number
+    // won't match this shape.
+    if (!/^[A-Za-z0-9+/]{30,}={0,2}$/.test(id)) return id
+    return 'group.' + Buffer.from(id, 'utf8').toString('base64')
+  }
+
   private async post(path: string, body: unknown, label: string): Promise<unknown> {
     const res = await this.fetchImpl(this.url(path), {
       method: 'POST',
@@ -41,7 +56,7 @@ export class SignalClient {
   }
 
   async sendMessage(input: SendInput): Promise<{ timestamp: number }> {
-    const recipients = input.groupId ? [input.groupId] : (input.recipients ?? [])
+    const recipients = input.groupId ? [this.toSendGroupId(input.groupId)] : (input.recipients ?? [])
     const body: Record<string, unknown> = {
       number: this.opts.number,
       recipients,
@@ -67,7 +82,7 @@ export class SignalClient {
     targetTimestamp: number
     message: string
   }): Promise<void> {
-    const recipients = input.groupId ? [input.groupId] : (input.recipient ? [input.recipient] : [])
+    const recipients = input.groupId ? [this.toSendGroupId(input.groupId)] : (input.recipient ? [input.recipient] : [])
     await this.post('/v2/send', {
       number: this.opts.number,
       recipients,
@@ -85,7 +100,7 @@ export class SignalClient {
     remove?: boolean
   }): Promise<void> {
     await this.post(`/v1/reactions/${encodeURIComponent(this.opts.number)}`, {
-      recipient: input.groupId ?? input.recipient,
+      recipient: input.groupId ? this.toSendGroupId(input.groupId) : input.recipient,
       reaction: input.reaction,
       target_author: input.targetAuthor,
       timestamp: input.targetTimestamp,
@@ -105,7 +120,7 @@ export class SignalClient {
     const res = await this.fetchImpl(this.url(`/v1/typing-indicator/${encodeURIComponent(this.opts.number)}`), {
       method: input.stop ? 'DELETE' : 'PUT',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ recipient: input.groupId ?? input.recipient }),
+      body: JSON.stringify({ recipient: input.groupId ? this.toSendGroupId(input.groupId) : input.recipient }),
     })
     if (!res.ok) throw new Error(`typing failed: ${res.status}`)
   }
