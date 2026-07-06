@@ -38,13 +38,18 @@
   border-radius: 50%;
   background: var(--accent);
   color: #fff;
-  /* A + glyph's optical center sits a hair below its bounding-box center.
-     Match line-height to the button and nudge up 1px to balance it. */
-  font-size: 1.25rem;
-  line-height: 32px;
-  margin-top: -1px;
+  /* An SVG icon centers geometrically; a + text glyph does not (its optical
+     center sits below the box center, especially at large sizes). */
+  display: grid;
+  place-items: center;
   cursor: pointer;
   flex-shrink: 0;
+  padding: 0;
+}
+
+.newBtnIcon {
+  width: 18px;
+  height: 18px;
 }
 
 @media (prefers-reduced-motion: no-preference) {

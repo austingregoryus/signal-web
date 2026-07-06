@@ -5,6 +5,7 @@ import styles from './Thread.module.css'
 
 export function Thread({
   conversationId = null, messages, onReact, onReply, onEdit, hasMore, loadingMore, onLoadMore, typing,
+  isGroup = false, resolveName,
 }: {
   conversationId?: string | null
   messages: Msg[]
@@ -15,6 +16,10 @@ export function Thread({
   loadingMore?: boolean
   onLoadMore?: (beforeTimestamp: number) => void | Promise<unknown>
   typing?: boolean
+  /** Group context — show sender labels on inbound messages. */
+  isGroup?: boolean
+  /** Resolve an author id/number to a display name (for group sender labels). */
+  resolveName?: (authorId: string, authorNumber: string | null) => string | null
 }): React.JSX.Element {
   const scrollRef = useRef<HTMLDivElement | null>(null)
   const prevHeightRef = useRef<number | null>(null)
@@ -94,6 +99,8 @@ export function Thread({
             onReply={onReply}
             onEdit={onEdit}
             quoteOf={quoteOf}
+            showSender={isGroup && m.direction === 'in'}
+            resolveName={resolveName}
           />
         )
       })}

@@ -186,6 +186,17 @@ export function Chat(): React.JSX.Element {
 
   const selectedConv = conversations.find((c) => c.id === selected) ?? null
   const showThreadOnMobile = Boolean(selected)
+  // Resolve a group sender to a display name: look the author up in the loaded
+  // conversations by id (uuid) or number, preferring a real display name.
+  const resolveName = useCallback((authorId: string, authorNumber: string | null): string | null => {
+    const byId = conversations.find((c) => c.id === authorId)
+    if (byId?.displayName) return byId.displayName
+    if (authorNumber) {
+      const byNumber = conversations.find((c) => c.id === authorNumber)
+      if (byNumber?.displayName) return byNumber.displayName
+    }
+    return null
+  }, [conversations])
 
   return (
     <div className={`${styles.layout} ${showThreadOnMobile ? styles.threadActive : ''}`}>
@@ -198,7 +209,9 @@ export function Chat(): React.JSX.Element {
             aria-label="New conversation"
             title="New conversation"
           >
-            +
+            <svg className={styles.newBtnIcon} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" aria-hidden="true">
+              <path d="M12 5v14M5 12h14" />
+            </svg>
           </button>
         </div>
         <ConversationList
@@ -246,6 +259,8 @@ export function Chat(): React.JSX.Element {
               loadingMore={loadingMore}
               onLoadMore={selected ? (before) => loadMore(selected, before) : undefined}
               typing={typing}
+              isGroup={selectedConv?.type === 'group'}
+              resolveName={resolveName}
             />
             <Composer
               onSend={onSend}
