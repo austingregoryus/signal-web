@@ -26,21 +26,37 @@ export class LiveBridge {
       this.deps.hub.broadcast({ type: 'typing', source: env.sourceUuid ?? env.sourceNumber ?? null } as LiveEvent)
       return
     }
-    // For stored kinds, include the affected conversationId so the browser only
-    // refetches the tail when the event is for the open thread. Parse to derive
-    // it (the same parse ingest just did); for receipts the target is one of the
-    // user's own conversations, which we can't cheaply identify here, so omit it
-    // and let the browser fall back to refreshing whichever thread is open.
+    // For stored kinds, include the affected conversationId so the browser can
+    // skip refetching when the event isn't for the open thread. We parse (the
+    // same parse ingest just did) to derive both the event type — which may be
+    // 'message' OR 'reaction' for a data envelope — and the conversation id.
+    // Reactions/receipts target a specific message; their conversation is the
+    // one that message lives in, which we look up so the browser refreshes the
+    // right thread. If we can't resolve it, the browser falls back to refreshing
+    // the open thread (correct for the common "event in the open thread" case).
     if (kind === 'data' || kind === 'sync-sent') {
       const events = parseEnvelope(raw, this.deps.selfId)
+      const reaction = events.find((e) => e.kind === 'reaction')
       const msg = events.find((e) => e.kind === 'message')
-      this.deps.hub.broadcast({
-        type: 'message',
-        timestamp: env.timestamp ?? null,
-        conversationId: msg && msg.kind === 'message' ? msg.conversationId : null,
-      } as LiveEvent)
+      if (reaction && reaction.kind === 'reaction') {
+        const conversationId = this.deps.store.messages.findConversationForMessage(
+          reaction.targetAuthorId, reaction.targetTimestamp,
+        )
+        this.deps.hub.broadcast({ type: 'reaction', timestamp: env.timestamp ?? null, conversationId } as LiveEvent)
+      } else {
+        this.deps.hub.broadcast({
+          type: 'message',
+          timestamp: env.timestamp ?? null,
+          conversationId: msg && msg.kind === 'message' ? msg.conversationId : null,
+        } as LiveEvent)
+      }
     } else if (kind === 'receipt') {
-      this.deps.hub.broadcast({ type: 'receipt', timestamp: env.timestamp ?? null } as LiveEvent)
+      const events = parseEnvelope(raw, this.deps.selfId)
+      const receipt = events.find((e) => e.kind === 'receipt')
+      const conversationId = receipt && receipt.kind === 'receipt'
+        ? this.deps.store.messages.findConversationForMessage(receipt.targetAuthorId, receipt.targetTimestamp)
+        : null
+      this.deps.hub.broadcast({ type: 'receipt', timestamp: env.timestamp ?? null, conversationId } as LiveEvent)
     }
   }
 }

@@ -121,4 +121,16 @@ export class MessageRepo {
       )
       .run(newBody, editedTimestamp, authorId, timestamp)
   }
+
+  /**
+   * Look up the conversation a (authorId, timestamp) message belongs to. Used by
+   * the live bridge to attribute reaction/receipt events to the right thread so
+   * the browser refreshes the correct conversation. Returns null if not found.
+   */
+  findConversationForMessage(authorId: string, timestamp: number): string | null {
+    const row = this.db
+      .prepare('SELECT conversation_id FROM messages WHERE author_id = ? AND timestamp = ?')
+      .get(authorId, timestamp) as { conversation_id: string } | undefined
+    return row?.conversation_id ?? null
+  }
 }

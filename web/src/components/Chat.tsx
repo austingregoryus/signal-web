@@ -111,13 +111,16 @@ export function Chat(): React.JSX.Element {
   }, [])
 
   useLiveSocket((ev) => {
-    if (ev.type === 'message' || ev.type === 'receipt') {
+    if (ev.type === 'message' || ev.type === 'reaction' || ev.type === 'receipt') {
       void loadConversations()
-      // Only refresh the open thread if the event is FOR this conversation —
-      // otherwise we'd fetch the wrong tail and miss the actual new message.
-      // (Events for other conversations still bump the sidebar via loadConversations.)
+      // Refresh the open thread when the event is FOR it. When the event carries
+      // a conversation id, only refresh on an exact match (avoids wasted fetches
+      // for other-conversation messages). When it has no id (older bridge or an
+      // unattributable event), fall back to refreshing the open thread — the
+      // common case is that the event IS in the open thread.
       const targetId = typeof ev.conversationId === 'string' ? ev.conversationId : null
-      if (targetId && targetId === selectedRef.current) void refreshTail(targetId)
+      const current = selectedRef.current
+      if (current && (targetId === null || targetId === current)) void refreshTail(current)
       if (
         ev.type === 'message' &&
         ev.message === undefined &&
