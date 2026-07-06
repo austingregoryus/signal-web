@@ -26,8 +26,20 @@ describe('groupId normalization', () => {
     expect(toSendGroupId('+15551234567')).toBe('+15551234567')
   })
 
-  it('round-trips: toSendGroupId(normalizeGroupId(x)) === x for prefixed ids', () => {
+  it('round-trips: toSendGroupId(normalizeGroupId(x)) === x for prefixed id', () => {
     expect(toSendGroupId(normalizeGroupId(PREFIXED))).toBe(PREFIXED)
     expect(normalizeGroupId(toSendGroupId(RAW))).toBe(RAW)
+  })
+
+  it('toSendGroupId does NOT misfire on a long hex-only token (no + or /)', () => {
+    // A 32-char hex sha256 prefix looks base64-ish but is hex-only; it must NOT
+    // be treated as a group id (would route a DM recipient to the group endpoint).
+    const hex = '9f86d081884c7d659a2feaa0c55ad015'
+    expect(toSendGroupId(hex)).toBe(hex)
+  })
+
+  it('toSendGroupId does NOT misfire on a 40+ char alphanumeric-only token', () => {
+    const token = 'abcdefghijklmnopqrstuvwxyz0123456789abcdefghij' // 46 chars, no + or /
+    expect(toSendGroupId(token)).toBe(token)
   })
 })

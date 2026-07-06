@@ -93,7 +93,12 @@ export async function main(): Promise<void> {
 
   // periodic maintenance
   setInterval(() => { void profile.refresh() }, 10 * 60_000).unref()
-  setInterval(() => { pruneOlderThan(store, Date.now()) }, 60 * 60_000).unref()
+  setInterval(() => {
+    const result = pruneOlderThan(store, Date.now())
+    if (result.attachmentIds.length > 0) {
+      void Promise.all(result.attachmentIds.map((id) => blobs.delete(id)))
+    }
+  }, 60 * 60_000).unref()
   void profile.refresh()
 
   const webDir = process.env.WEB_DIR ?? './web/dist'

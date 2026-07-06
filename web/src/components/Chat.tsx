@@ -23,6 +23,11 @@ export function Chat(): React.JSX.Element {
   const [showInfo, setShowInfo] = useState(false)
   const typingTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
   const lastSeenRef = useRef(0)
+  // Mirror of `selected` for reading inside async callbacks without capturing
+  // a stale closure (the live handler + loadThread bail-out both need the
+  // freshest value).
+  const selectedRef = useRef<string | null>(null)
+  useEffect(() => { selectedRef.current = selected }, [selected])
 
   const loadConversations = useCallback(async () => {
     const convs = await api.get<Conversation[]>('/api/conversations')
@@ -35,8 +40,11 @@ export function Chat(): React.JSX.Element {
   const [hasMore, setHasMore] = useState(true)
   const [loadingMore, setLoadingMore] = useState(false)
   const loadThread = useCallback(async (id: string) => {
-    // Initial load: newest PAGE messages, oldest-first for display.
+    // Initial load: newest PAGE messages, oldest-first for display. Capture the
+    // id so a slow response for a previously-selected conversation can't land
+    // its messages under the now-current one.
     const res = await api.get<{ messages: Message[] }>(`/api/conversations/${encodeURIComponent(id)}/messages?limit=${PAGE}`)
+    if (selectedRef.current !== id) return // user has moved on; drop the stale result
     const oldestFirst = [...res.messages].reverse()
     setMessages(oldestFirst)
     setHasMore(res.messages.length === PAGE) // a full page means there may be more
@@ -52,23 +60,43 @@ export function Chat(): React.JSX.Element {
       const res = await api.get<{ messages: Message[] }>(`/api/conversations/${encodeURIComponent(id)}/messages?limit=${PAGE}&before=${beforeTimestamp}`)
       setHasMore(res.messages.length === PAGE)
       const oldestFirst = [...res.messages].reverse()
-      setMessages((prev) => [...oldestFirst, ...prev])
+      // Dedupe by server id in case the cursor overlaps already-loaded messages.
+      setMessages((prev) => {
+        const seen = new Set(prev.map((m) => m.id))
+        const fresh = oldestFirst.filter((m) => !seen.has(m.id))
+        return fresh.length > 0 ? [...fresh, ...prev] : prev
+      })
       return oldestFirst
     } finally {
       setLoadingMore(false)
     }
   }, [])
-  // Refresh just the newest page on a live event — append only genuinely new
-  // messages (deduped by authorId+timestamp) so the user's scroll position and
-  // already-loaded older messages are preserved. Replaces the full-reload that
-  // would otherwise wipe pagination state.
+  // Refresh the newest page on a live event. Merge by server `id` rather than
+  // authorId+timestamp: an edited message or one gaining a reaction/receipt
+  // keeps the same id, so we REPLACE it (so edits/reactions/read-receipts
+  // propagate live) and APPEND only genuinely new ids. Preserves the user's
+  // scroll position and already-loaded older history.
   const refreshTail = useCallback(async (id: string) => {
     const res = await api.get<{ messages: Message[] }>(`/api/conversations/${encodeURIComponent(id)}/messages?limit=${PAGE}`)
+    if (selectedRef.current !== id) return // user has moved on
     const newest = [...res.messages].reverse() // oldest-first
     setMessages((prev) => {
-      const seen = new Set(prev.map((m) => `${m.authorId}:${m.timestamp}`))
-      const fresh = newest.filter((m) => !seen.has(`${m.authorId}:${m.timestamp}`))
-      return fresh.length > 0 ? [...prev, ...fresh] : prev
+      const byId = new Map(prev.map((m) => [m.id, m]))
+      let changed = false
+      for (const m of newest) {
+        if (byId.has(m.id)) {
+          if (byId.get(m.id) !== m) { byId.set(m.id, m); changed = true }
+        } else {
+          byId.set(m.id, m); changed = true
+        }
+      }
+      if (!changed) return prev
+      // Preserve order: keep prev's id ordering, append new ids at the end
+      // (they're newer than the loaded tail), with replaced values slotted in.
+      const ordered = prev.map((m) => byId.get(m.id) ?? m)
+      const prevIds = new Set(prev.map((m) => m.id))
+      for (const m of newest) if (!prevIds.has(m.id)) ordered.push(m)
+      return ordered
     })
   }, [])
 
@@ -85,8 +113,11 @@ export function Chat(): React.JSX.Element {
   useLiveSocket((ev) => {
     if (ev.type === 'message' || ev.type === 'receipt') {
       void loadConversations()
-      // Append only genuinely new messages; preserve pagination + scroll.
-      if (selected) void refreshTail(selected)
+      // Only refresh the open thread if the event is FOR this conversation —
+      // otherwise we'd fetch the wrong tail and miss the actual new message.
+      // (Events for other conversations still bump the sidebar via loadConversations.)
+      const targetId = typeof ev.conversationId === 'string' ? ev.conversationId : null
+      if (targetId && targetId === selectedRef.current) void refreshTail(targetId)
       if (
         ev.type === 'message' &&
         ev.message === undefined &&

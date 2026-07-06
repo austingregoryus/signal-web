@@ -113,22 +113,27 @@ export class ConversationRepo {
    */
   mergeInto(canonicalId: string, obsoleteId: string): void {
     if (canonicalId === obsoleteId) return
-    const obsolete = this.db
-      .prepare('SELECT display_name, last_activity FROM conversations WHERE id = ?')
-      .get(obsoleteId) as { display_name: string | null; last_activity: number } | undefined
-    if (!obsolete) return // nothing to merge (already merged or never existed)
-    this.db.prepare('UPDATE messages SET conversation_id = ? WHERE conversation_id = ?').run(canonicalId, obsoleteId)
-    // Carry over the display name only if the canonical row lacks one.
-    if (obsolete.display_name) {
+    // Atomic: a crash mid-merge would otherwise leave messages repointed but
+    // the obsolete row still present (phantom empty conversation).
+    const tx = this.db.transaction((canonical: string, obsolete: string) => {
+      const row = this.db
+        .prepare('SELECT display_name, last_activity FROM conversations WHERE id = ?')
+        .get(obsolete) as { display_name: string | null; last_activity: number } | undefined
+      if (!row) return // nothing to merge (already merged or never existed)
+      this.db.prepare('UPDATE messages SET conversation_id = ? WHERE conversation_id = ?').run(canonical, obsolete)
+      // Carry over the display name only if the canonical row lacks one.
+      if (row.display_name) {
+        this.db
+          .prepare('UPDATE conversations SET display_name = COALESCE(display_name, ?) WHERE id = ?')
+          .run(row.display_name, canonical)
+      }
+      // Bump last_activity if the obsolete conversation was more recent.
       this.db
-        .prepare('UPDATE conversations SET display_name = COALESCE(display_name, ?) WHERE id = ?')
-        .run(obsolete.display_name, canonicalId)
-    }
-    // Bump last_activity if the obsolete conversation was more recent.
-    this.db
-      .prepare('UPDATE conversations SET last_activity = MAX(last_activity, ?) WHERE id = ?')
-      .run(obsolete.last_activity, canonicalId)
-    this.db.prepare('DELETE FROM conversations WHERE id = ?').run(obsoleteId)
+        .prepare('UPDATE conversations SET last_activity = MAX(last_activity, ?) WHERE id = ?')
+        .run(row.last_activity, canonical)
+      this.db.prepare('DELETE FROM conversations WHERE id = ?').run(obsolete)
+    })
+    tx(canonicalId, obsoleteId)
   }
 
   /**
@@ -137,12 +142,15 @@ export class ConversationRepo {
    * list of attachment ids so the caller can also delete their encrypted blobs.
    * There are no SQL foreign keys / cascades in the schema, so this does the
    * cleanup manually by joining through messages' (author_id, timestamp) pairs.
-   * Idempotent — a no-op if the conversation doesn't exist.
+   * Idempotent — a no-op if the conversation doesn't exist. The cleanup runs in
+   * a transaction so a crash can't leave orphaned reaction/receipt rows whose
+   * joining messages are already gone.
    */
   remove(id: string): string[] {
+    // Collect attachment ids BEFORE the transaction (caller needs them for blob
+    // cleanup); they're read-only here so reading outside the tx is fine.
     const exists = this.db.prepare('SELECT 1 FROM conversations WHERE id = ?').get(id)
     if (!exists) return []
-    // Collect attachment ids BEFORE deleting their rows, so blobs can be cleared.
     const attachmentIds = (
       this.db
         .prepare(
@@ -152,29 +160,32 @@ export class ConversationRepo {
         )
         .all(id) as { id: string }[]
     ).map((r) => r.id)
-    // Reactions + receipts key on (author_id, timestamp) like attachments.
-    this.db
-      .prepare(
-        `DELETE FROM reactions WHERE (target_author_id, target_timestamp) IN
-           (SELECT author_id, timestamp FROM messages WHERE conversation_id = ?)`,
-      )
-      .run(id)
-    this.db
-      .prepare(
-        `DELETE FROM receipts WHERE (target_author_id, target_timestamp) IN
-           (SELECT author_id, timestamp FROM messages WHERE conversation_id = ?)`,
-      )
-      .run(id)
-    this.db
-      .prepare(
-        `DELETE FROM attachments WHERE (message_author_id, message_timestamp) IN
-           (SELECT author_id, timestamp FROM messages WHERE conversation_id = ?)`,
-      )
-      .run(id)
-    this.db.prepare('DELETE FROM messages WHERE conversation_id = ?').run(id)
-    this.db.prepare('DELETE FROM conversations WHERE id = ?').run(id)
-    // Drop any alias pointing at this conversation so it isn't re-resolved.
-    this.db.prepare('DELETE FROM contact_aliases WHERE uuid = ? OR number = ?').run(id, id)
+    const tx = this.db.transaction((target: string) => {
+      // Reactions + receipts key on (author_id, timestamp) like attachments.
+      this.db
+        .prepare(
+          `DELETE FROM reactions WHERE (target_author_id, target_timestamp) IN
+             (SELECT author_id, timestamp FROM messages WHERE conversation_id = ?)`,
+        )
+        .run(target)
+      this.db
+        .prepare(
+          `DELETE FROM receipts WHERE (target_author_id, target_timestamp) IN
+             (SELECT author_id, timestamp FROM messages WHERE conversation_id = ?)`,
+        )
+        .run(target)
+      this.db
+        .prepare(
+          `DELETE FROM attachments WHERE (message_author_id, message_timestamp) IN
+             (SELECT author_id, timestamp FROM messages WHERE conversation_id = ?)`,
+        )
+        .run(target)
+      this.db.prepare('DELETE FROM messages WHERE conversation_id = ?').run(target)
+      this.db.prepare('DELETE FROM conversations WHERE id = ?').run(target)
+      // Drop any alias pointing at this conversation so it isn't re-resolved.
+      this.db.prepare('DELETE FROM contact_aliases WHERE uuid = ? OR number = ?').run(target, target)
+    })
+    tx(id)
     return attachmentIds
   }
 }

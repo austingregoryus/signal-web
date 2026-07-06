@@ -2,6 +2,7 @@ import type { Store } from '../store/store'
 import type { BrowserHub, LiveEvent } from '../api/hub'
 import { ingestEnvelope } from './ingest'
 import { classifyEnvelope, type RawEnvelope } from './envelopes'
+import { parseEnvelope } from './parse'
 
 export interface LiveBridgeDeps {
   store: Store
@@ -25,10 +26,19 @@ export class LiveBridge {
       this.deps.hub.broadcast({ type: 'typing', source: env.sourceUuid ?? env.sourceNumber ?? null } as LiveEvent)
       return
     }
-    // For stored kinds, notify the browser that its store view changed. The browser
-    // then pulls the affected conversation via REST (or the event carries the row).
+    // For stored kinds, include the affected conversationId so the browser only
+    // refetches the tail when the event is for the open thread. Parse to derive
+    // it (the same parse ingest just did); for receipts the target is one of the
+    // user's own conversations, which we can't cheaply identify here, so omit it
+    // and let the browser fall back to refreshing whichever thread is open.
     if (kind === 'data' || kind === 'sync-sent') {
-      this.deps.hub.broadcast({ type: 'message', timestamp: env.timestamp ?? null } as LiveEvent)
+      const events = parseEnvelope(raw, this.deps.selfId)
+      const msg = events.find((e) => e.kind === 'message')
+      this.deps.hub.broadcast({
+        type: 'message',
+        timestamp: env.timestamp ?? null,
+        conversationId: msg && msg.kind === 'message' ? msg.conversationId : null,
+      } as LiveEvent)
     } else if (kind === 'receipt') {
       this.deps.hub.broadcast({ type: 'receipt', timestamp: env.timestamp ?? null } as LiveEvent)
     }
