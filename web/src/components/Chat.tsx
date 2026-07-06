@@ -206,6 +206,7 @@ export function Chat(): React.JSX.Element {
               </button>
             </div>
             <Thread
+              conversationId={selected}
               messages={messages}
               onReact={onReact}
               onReply={(m) => { setReplyTo(m); setEditing(null) }}

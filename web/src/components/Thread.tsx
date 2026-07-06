@@ -4,8 +4,9 @@ import { Message } from './Message'
 import styles from './Thread.module.css'
 
 export function Thread({
-  messages, onReact, onReply, onEdit, hasMore, loadingMore, onLoadMore, typing,
+  conversationId = null, messages, onReact, onReply, onEdit, hasMore, loadingMore, onLoadMore, typing,
 }: {
+  conversationId?: string | null
   messages: Msg[]
   onReact?: (m: Msg, emoji: string) => void
   onReply?: (m: Msg) => void
@@ -18,20 +19,41 @@ export function Thread({
   const scrollRef = useRef<HTMLDivElement | null>(null)
   const prevHeightRef = useRef<number | null>(null)
   const loadingRef = useRef(false)
+  // Track which conversation the user is viewing. When it changes, we treat the
+  // next render as "just opened" and force-scroll to the bottom — otherwise the
+  // container defaults to scrollTop=0 (the oldest message), which looks broken.
+  const convRef = useRef<string | null>(null)
+  const justOpenedRef = useRef(true)
 
-  // Scroll to the bottom when a new message arrives (but NOT when the user has
-  // scrolled up to read history — that would yank them down).
+  // Mark "just opened" whenever the conversation id changes.
+  useEffect(() => {
+    if (convRef.current !== conversationId) {
+      convRef.current = conversationId
+      justOpenedRef.current = true
+    }
+  }, [conversationId])
+
   useEffect(() => {
     const el = scrollRef.current
     if (!el) return
-    // If prepended history is landing (prevHeightRef set), restore position.
+    // Prepended history landing: restore the user's prior scroll position.
     if (prevHeightRef.current != null) {
-      const restored = el.scrollHeight - prevHeightRef.current
-      el.scrollTop = restored
+      el.scrollTop = el.scrollHeight - prevHeightRef.current
       prevHeightRef.current = null
       return
     }
-    // Otherwise stick to the bottom unless the user is scrolled up.
+    // Just opened this conversation: always jump to bottom. But only clear the
+    // flag once messages are actually present (the first render may run before
+    // the async loadThread resolves, with an empty list and equal scrollHeight
+    // — stay "just opened" until there's something to scroll to).
+    if (justOpenedRef.current) {
+      if (messages.length === 0) return
+      el.scrollTop = el.scrollHeight
+      justOpenedRef.current = false
+      return
+    }
+    // Otherwise a new message arrived — stick to the bottom only if the user is
+    // already near it (don't yank them down while reading history).
     const nearBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 120
     if (nearBottom) el.scrollTop = el.scrollHeight
   }, [messages.length, typing])
