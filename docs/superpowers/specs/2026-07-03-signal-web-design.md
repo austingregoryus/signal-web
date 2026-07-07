@@ -15,7 +15,7 @@
 
 ## 1. Purpose
 
-A self-hosted web client that lets a specific, single user (Austin's dad) read and
+A self-hosted web client that lets a specific, single user (a family member) read and
 send his Signal messages from a locked-down work browser — no application installs,
 no phone access on-site. It works by linking a persistent server as a Signal
 **linked device** and exposing a private, authenticated web UI over a plain HTTPS URL.
@@ -51,7 +51,7 @@ with the short retention window (§7).
 ## 4. Architecture (two containers, Docker Compose)
 
 ```
-        Work browser (dad)
+        Work browser (user)
               │  HTTPS
      ┌────────▼─────────┐
      │ Cloudflare Tunnel│   plain public URL, TLS, origin hidden

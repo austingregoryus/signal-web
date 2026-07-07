@@ -21,30 +21,30 @@ function open(): Store {
 
 describe('reconcileConversationAliases', () => {
   it('folds a number-keyed conversation into the UUID using message metadata', () => {
-    // Reproduce the Dad bug: an outbound message keyed by number, an inbound
+    // Reproduce the contact-split bug: an outbound message keyed by number, an inbound
     // reply keyed by UUID — two conversations for one contact.
     const s = open()
-    s.conversations.ensure({ id: '+15551234567', type: 'dm', displayName: 'Dad' })
+    s.conversations.ensure({ id: '+15551234567', type: 'dm', displayName: 'Sam' })
     s.messages.upsert({ conversationId: '+15551234567', authorId: 'self', timestamp: 100, direction: 'out', body: 'hi', receivedAt: 1 })
-    s.conversations.ensure({ id: 'uuid-dad', type: 'dm' })
-    s.messages.upsert({ conversationId: 'uuid-dad', authorId: 'uuid-dad', authorNumber: '+15551234567', timestamp: 200, direction: 'in', body: 'reply', receivedAt: 2 })
+    s.conversations.ensure({ id: 'uuid-sam', type: 'dm' })
+    s.messages.upsert({ conversationId: 'uuid-sam', authorId: 'uuid-sam', authorNumber: '+15551234567', timestamp: 200, direction: 'in', body: 'reply', receivedAt: 2 })
 
     const result = reconcileConversationAliases(s)
     expect(result.merged).toBe(1)
     // One conversation remains, under the UUID, with the name carried over.
     const convs = s.conversations.list()
-    expect(convs.map((c) => c.id)).toEqual(['uuid-dad'])
-    expect(convs[0].displayName).toBe('Dad')
+    expect(convs.map((c) => c.id)).toEqual(['uuid-sam'])
+    expect(convs[0].displayName).toBe('Sam')
     // The alias is recorded so future number references resolve to the UUID.
-    expect(s.conversations.resolveAlias('+15551234567')).toBe('uuid-dad')
+    expect(s.conversations.resolveAlias('+15551234567')).toBe('uuid-sam')
     // Both messages live under the canonical conversation now.
-    expect(s.messages.listByConversation('uuid-dad', 10)).toHaveLength(2)
+    expect(s.messages.listByConversation('uuid-sam', 10)).toHaveLength(2)
   })
 
   it('is idempotent — running again is a no-op', () => {
     const s = open()
-    s.conversations.ensure({ id: 'uuid-dad', type: 'dm', displayName: 'Dad' })
-    s.messages.upsert({ conversationId: 'uuid-dad', authorId: 'uuid-dad', authorNumber: '+15551234567', timestamp: 200, direction: 'in', body: 'reply', receivedAt: 2 })
+    s.conversations.ensure({ id: 'uuid-sam', type: 'dm', displayName: 'Sam' })
+    s.messages.upsert({ conversationId: 'uuid-sam', authorId: 'uuid-sam', authorNumber: '+15551234567', timestamp: 200, direction: 'in', body: 'reply', receivedAt: 2 })
     // First run records the alias (nothing to merge — no separate number convo).
     const first = reconcileConversationAliases(s)
     const second = reconcileConversationAliases(s)

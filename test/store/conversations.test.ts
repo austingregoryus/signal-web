@@ -81,27 +81,27 @@ describe('ConversationRepo', () => {
   it('mergeInto repoints messages, carries the display name, and deletes the obsolete row', () => {
     const s = open()
     // Number-keyed conversation (created by /api/start) with a name and a message.
-    s.conversations.ensure({ id: '+15551234567', type: 'dm', displayName: 'Dad' })
+    s.conversations.ensure({ id: '+15551234567', type: 'dm', displayName: 'Sam' })
     s.messages.upsert({ conversationId: '+15551234567', authorId: 'self', timestamp: 100, direction: 'out', body: 'hi', receivedAt: 1 })
-    // UUID-keyed conversation (created when Dad replied) — no name, one inbound message.
-    s.conversations.ensure({ id: 'uuid-dad', type: 'dm' })
-    s.messages.upsert({ conversationId: 'uuid-dad', authorId: 'uuid-dad', authorNumber: '+15551234567', timestamp: 200, direction: 'in', body: 'hello', receivedAt: 2 })
+    // UUID-keyed conversation (created when Sam replied) — no name, one inbound message.
+    s.conversations.ensure({ id: 'uuid-sam', type: 'dm' })
+    s.messages.upsert({ conversationId: 'uuid-sam', authorId: 'uuid-sam', authorNumber: '+15551234567', timestamp: 200, direction: 'in', body: 'hello', receivedAt: 2 })
 
-    s.conversations.mergeInto('uuid-dad', '+15551234567')
+    s.conversations.mergeInto('uuid-sam', '+15551234567')
 
     const convs = s.conversations.list()
-    expect(convs.map((c) => c.id)).toEqual(['uuid-dad'])
-    expect(convs[0].displayName).toBe('Dad') // name carried over from the number-keyed row
+    expect(convs.map((c) => c.id)).toEqual(['uuid-sam'])
+    expect(convs[0].displayName).toBe('Sam') // name carried over from the number-keyed row
     // Both messages now live under the canonical uuid conversation.
-    const msgs = s.messages.listByConversation('uuid-dad', 10)
+    const msgs = s.messages.listByConversation('uuid-sam', 10)
     expect(msgs.map((m) => m.body).sort()).toEqual(['hello', 'hi'])
     expect(s.messages.listByConversation('+15551234567', 10)).toHaveLength(0)
   })
 
   it('mergeInto is a no-op when the obsolete conversation does not exist', () => {
     const s = open()
-    s.conversations.ensure({ id: 'uuid-dad', type: 'dm' })
-    s.conversations.mergeInto('uuid-dad', '+15550000000') // never created
-    expect(s.conversations.list().map((c) => c.id)).toEqual(['uuid-dad'])
+    s.conversations.ensure({ id: 'uuid-sam', type: 'dm' })
+    s.conversations.mergeInto('uuid-sam', '+15550000000') // never created
+    expect(s.conversations.list().map((c) => c.id)).toEqual(['uuid-sam'])
   })
 })

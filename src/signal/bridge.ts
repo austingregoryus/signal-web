@@ -45,7 +45,7 @@ export class LiveBridge {
         this.deps.hub.broadcast({ type: 'reaction', timestamp: env.timestamp ?? null, conversationId } as LiveEvent)
       } else {
         // Carry a sender label + body preview so the browser can show a richer
-        // notification ("Dad: hey son") without an extra round-trip.
+        // notification ("Sam: hey") without an extra round-trip.
         const senderName = env.sourceName ?? env.sourceNumber ?? null
         const preview = msg && msg.kind === 'message' ? (msg.body ?? (msg.attachments.length > 0 ? '📎 Photo' : null)) : null
         this.deps.hub.broadcast({
