@@ -43,7 +43,7 @@ PUBLIC_URL=https://signal.example.com
 ALLOWED_ORIGIN=https://signal.example.com
 RP_ID=example.com            # the registrable domain (for WebAuthn/passkeys)
 SECURE_COOKIES=true          # cookies carry Secure behind HTTPS
-TRUST_PROXY=true             # rate limiter keys on X-Forwarded-For from the tunnel
+TRUST_PROXY=1                # trusted proxy hops (1 = the cloudflared sidecar); never use `true`
 
 # During initial linking only (set false after):
 ENABLE_LINK_PAGE=true

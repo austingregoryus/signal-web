@@ -1,4 +1,4 @@
-export const SCHEMA_VERSION = 5
+export const SCHEMA_VERSION = 6
 
 export const SCHEMA_SQL = `
 CREATE TABLE IF NOT EXISTS schema_meta (
@@ -39,7 +39,12 @@ CREATE TABLE IF NOT EXISTS messages (
   quote_timestamp  INTEGER,
   edited_timestamp INTEGER,                 -- set when the message was edited
   deleted          INTEGER NOT NULL DEFAULT 0,  -- tombstone (remoteDelete)
-  UNIQUE(author_id, timestamp)
+  -- conversation_id is part of the identity: (author_id, timestamp) alone is
+  -- attacker-controllable (a contact picks the send timestamp on the wire), so
+  -- without conversation_id a group message and a DM crafted with the same
+  -- timestamp would collide and one could silently overwrite the other's
+  -- conversation/body. Scoping the key per conversation keeps them distinct.
+  UNIQUE(author_id, timestamp, conversation_id)
 );
 CREATE INDEX IF NOT EXISTS idx_messages_conversation
   ON messages(conversation_id, timestamp);

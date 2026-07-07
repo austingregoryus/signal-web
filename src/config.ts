@@ -13,9 +13,20 @@ export interface AppConfig {
   rpOrigin: string
   attachmentDir: string
   secureCookies: boolean
-  trustProxy: boolean
+  trustProxy: number | boolean
   sessionTtlDays: number
   sessionIdleDays: number
+}
+
+function parseTrustProxy(raw: string | undefined): number | boolean {
+  if (raw === undefined) return 1
+  if (raw === 'false') return false
+  if (raw === 'true') return true
+  const hops = Number(raw)
+  if (!Number.isInteger(hops) || hops < 0) {
+    throw new Error('TRUST_PROXY must be "false", "true", or a non-negative integer hop count')
+  }
+  return hops
 }
 
 export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
@@ -44,7 +55,14 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     rpOrigin,
     attachmentDir: env.ATTACHMENT_DIR ?? './data/attachments',
     secureCookies: (env.SECURE_COOKIES ?? 'true') !== 'false',
-    trustProxy: (env.TRUST_PROXY ?? 'true') !== 'false',
+    // Number of trusted reverse-proxy hops in front of us, counted from the
+    // socket peer inward. Behind a Cloudflare Tunnel the only hop is the
+    // cloudflared sidecar, so the default is 1 — this makes Fastify resolve
+    // req.ip to cloudflared's reported client IP and IGNORE any attacker-
+    // supplied X-Forwarded-For entries earlier in the chain. Setting a boolean
+    // (TRUST_PROXY=true) would trust the entire forged chain and let clients
+    // spoof req.ip to bypass the login rate limiter. TRUST_PROXY=false disables.
+    trustProxy: parseTrustProxy(env.TRUST_PROXY),
     sessionTtlDays: Number(env.SESSION_TTL_DAYS ?? 30),
     sessionIdleDays: Number(env.SESSION_IDLE_DAYS ?? 7),
   }

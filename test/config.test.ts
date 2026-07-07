@@ -34,7 +34,7 @@ describe('loadConfig', () => {
     expect(cfg.dbPath).toBe('./data/signal-web.db')
     expect(cfg.secureCookies).toBe(true)
     expect(cfg.attachmentDir).toBe('./data/attachments')
-    expect(cfg.trustProxy).toBe(true)
+    expect(cfg.trustProxy).toBe(1)
     expect(cfg.sessionTtlDays).toBe(30)
     expect(cfg.sessionIdleDays).toBe(7)
     expect(cfg.publicUrl).toBe('http://localhost:8090')
@@ -53,5 +53,19 @@ describe('loadConfig', () => {
     const cfg = loadConfig({ ...base, SECURE_COOKIES: 'false', TRUST_PROXY: 'false' })
     expect(cfg.secureCookies).toBe(false)
     expect(cfg.trustProxy).toBe(false)
+  })
+
+  it('parses TRUST_PROXY as a trusted-hop count', () => {
+    expect(loadConfig({ ...base, TRUST_PROXY: '2' }).trustProxy).toBe(2)
+    expect(loadConfig({ ...base, TRUST_PROXY: '0' }).trustProxy).toBe(0)
+  })
+
+  it('still allows TRUST_PROXY=true to trust the whole chain (opt-in)', () => {
+    expect(loadConfig({ ...base, TRUST_PROXY: 'true' }).trustProxy).toBe(true)
+  })
+
+  it('rejects a non-integer TRUST_PROXY', () => {
+    expect(() => loadConfig({ ...base, TRUST_PROXY: 'yes' })).toThrow(/TRUST_PROXY/)
+    expect(() => loadConfig({ ...base, TRUST_PROXY: '-1' })).toThrow(/TRUST_PROXY/)
   })
 })

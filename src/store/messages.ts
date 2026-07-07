@@ -54,8 +54,9 @@ export class MessageRepo {
   constructor(private readonly db: Database.Database) {}
 
   upsert(m: MessageInput): void {
-    // On conflict, update only conversation/body/quote — never touch deleted/edited,
-    // so a redelivered envelope cannot resurrect a tombstoned or edited message.
+    // On conflict (same author+timestamp+conversation, i.e. a redelivered
+    // envelope), update only body/quote — never touch deleted/edited, so a
+    // redelivered envelope cannot resurrect a tombstoned or edited message.
     this.db
       .prepare(
         `INSERT INTO messages
@@ -63,8 +64,7 @@ export class MessageRepo {
             direction, body, quote_author_id, quote_timestamp)
          VALUES (@conversationId, @authorId, @authorNumber, @timestamp, @receivedAt,
                  @direction, @body, @quoteAuthorId, @quoteTimestamp)
-         ON CONFLICT(author_id, timestamp) DO UPDATE SET
-           conversation_id = excluded.conversation_id,
+         ON CONFLICT(author_id, timestamp, conversation_id) DO UPDATE SET
            body            = CASE
              WHEN messages.deleted = 1 OR messages.edited_timestamp IS NOT NULL
                THEN messages.body

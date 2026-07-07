@@ -9,9 +9,11 @@ messages stay on infrastructure you control, encrypted at rest.
 ![Tests](https://img.shields.io/badge/tests-213%20passing-success)
 
 > ⚠️ **This is unofficial, community-built software.** It is not affiliated with,
-> endorsed by, or maintained by the Signal Foundation. Signal is a trademark of
-> the Signal Foundation. Use at your own risk — see
+> endorsed by, or maintained by the Signal Foundation. Signal is a trademark of the
+> Signal Foundation. Use at your own risk — see
 > [Disclaimer & Security](#disclaimer--security) below.
+
+![Signal Web screenshot — a conversation open in the browser UI](./signal_web_screenshot.png)
 
 ## Why
 
@@ -242,8 +244,10 @@ this**. Use the official Signal apps, which are professionally audited.
 - **Auth:** password (Argon2id) gates a session; optional WebAuthn steps it up.
   Login attempts are per-IP rate-limited with a global backstop.
 - **Trust boundary:** the app trusts signal-cli (same Docker network) and the
-  reverse proxy (`trustProxy` on — `X-Forwarded-For` is honored, so **never
-  expose the app port directly**). Everything else is untrusted.
+  reverse proxy (`TRUST_PROXY` is a trusted-hop count, default `1` for the
+  cloudflared sidecar, so the real client IP is resolved without letting clients
+  spoof `X-Forwarded-For` — **never expose the app port directly**). Everything
+  else is untrusted.
 
 ### What this does NOT protect against
 

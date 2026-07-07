@@ -52,10 +52,14 @@ Cross-milestone TODOs surfaced during reviews. Each names the milestone that sho
 ## Added after Milestone 4 (web API & bridge)
 
 ### Deployment (M6)
-- **Must sit behind a trusted reverse proxy.** `trustProxy` defaults true; if the app were
-  exposed directly, a client could spoof `X-Forwarded-For` to reset per-IP login lockout
-  (bounded by the global cap). Our target IS behind a Cloudflare Tunnel, so this holds —
-  document it and don't expose the origin directly.
+- **~~Must sit behind a trusted reverse proxy.~~ RESOLVED (security review 2026-07-07).**
+  `trustProxy` previously defaulted to the boolean `true`, which trusts the *entire*
+  `X-Forwarded-For` chain — a client could inject a forged leftmost entry to make `req.ip`
+  arbitrary and reset per-IP login lockout (bounded only by the global cap), *even behind the
+  tunnel*. Being behind Cloudflare does not fix this: the bug is trusting attacker-injected hops
+  earlier than cloudflared's own. `TRUST_PROXY` is now a trusted-hop **count** (default `1` = the
+  cloudflared sidecar), so Fastify resolves `req.ip` to cloudflared's reported client IP and
+  ignores forged prefixes. Still don't expose the origin port directly.
 
 ### Frontend / client contract (M5)
 - **Live events are "pokes."** The bridge broadcasts minimal live events

@@ -36,6 +36,59 @@ export function openStore(path: string, key: string): Store {
     db.prepare('INSERT INTO schema_meta (version) VALUES (?)').run(SCHEMA_VERSION)
   }
 
+  // Migration to v6: widen the messages uniqueness key from
+  // (author_id, timestamp) to (author_id, timestamp, conversation_id).
+  // SQLite can't alter a table constraint in place, so rebuild the table.
+  // Existing rows satisfy the stricter old constraint, so they trivially
+  // satisfy the wider one — no collisions, no data loss. CREATE TABLE IF NOT
+  // EXISTS above already applied the new constraint to fresh DBs; this only
+  // fires for DBs created at v5 or earlier.
+  if (existing && existing.version < 6) {
+    // The current table SQL, with all whitespace stripped so we can match the
+    // UNIQUE clause regardless of formatting. A fresh v6 DB (created by the
+    // SCHEMA_SQL above) already has the widened clause; an old v5 DB doesn't.
+    const messagesSql = (
+      (db.prepare("SELECT sql FROM sqlite_master WHERE type='table' AND name='messages'").get() as
+        | { sql: string }
+        | undefined
+      )?.sql ?? ''
+    ).replace(/\s+/g, '')
+    const alreadyWidened = messagesSql.includes('UNIQUE(author_id,timestamp,conversation_id)')
+    // Only rebuild if the table still carries the old narrow unique constraint.
+    if (!alreadyWidened) {
+      db.exec(`
+        BEGIN;
+        CREATE TABLE messages_v6 (
+          id               INTEGER PRIMARY KEY AUTOINCREMENT,
+          conversation_id  TEXT NOT NULL,
+          author_id        TEXT NOT NULL,
+          author_number    TEXT,
+          timestamp        INTEGER NOT NULL,
+          received_at      INTEGER NOT NULL,
+          direction        TEXT NOT NULL,
+          body             TEXT,
+          quote_author_id  TEXT,
+          quote_timestamp  INTEGER,
+          edited_timestamp INTEGER,
+          deleted          INTEGER NOT NULL DEFAULT 0,
+          UNIQUE(author_id, timestamp, conversation_id)
+        );
+        INSERT INTO messages_v6
+          (id, conversation_id, author_id, author_number, timestamp, received_at,
+           direction, body, quote_author_id, quote_timestamp, edited_timestamp, deleted)
+          SELECT id, conversation_id, author_id, author_number, timestamp, received_at,
+                 direction, body, quote_author_id, quote_timestamp, edited_timestamp, deleted
+          FROM messages;
+        DROP TABLE messages;
+        ALTER TABLE messages_v6 RENAME TO messages;
+        CREATE INDEX IF NOT EXISTS idx_messages_conversation
+          ON messages(conversation_id, timestamp);
+        COMMIT;
+      `)
+    }
+    db.prepare('UPDATE schema_meta SET version = ?').run(SCHEMA_VERSION)
+  }
+
   // Additive column migrations for DBs created before the column existed.
   // SQLite has no ADD COLUMN IF NOT EXISTS, so guard with PRAGMA table_info.
   // This is the minimal migration runner; a full per-version runner is tracked

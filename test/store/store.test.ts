@@ -2,6 +2,7 @@ import { describe, it, expect, afterEach } from 'vitest'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { rmSync } from 'node:fs'
+import Database from 'better-sqlite3-multiple-ciphers'
 import { openStore } from '../../src/store/store'
 
 const paths: string[] = []
@@ -35,7 +36,70 @@ describe('openStore', () => {
     expect(tables).toContain('attachments')
     expect(tables).toContain('contact_aliases')
     const version = store.db.prepare('SELECT version FROM schema_meta').get() as { version: number }
-    expect(version.version).toBe(5)
+    expect(version.version).toBe(6)
+    store.close()
+  })
+
+  it('migrates a v5 messages table to the widened v6 unique key, preserving data', () => {
+    const path = tmpDb()
+    const key = 'migrate-key'
+
+    // Build a v5-shaped DB: old narrow UNIQUE(author_id, timestamp) + version 5.
+    const legacy = new Database(path)
+    legacy.pragma(`key = '${key}'`)
+    legacy.pragma('journal_mode = WAL')
+    legacy.exec(`
+      CREATE TABLE schema_meta (version INTEGER NOT NULL);
+      INSERT INTO schema_meta (version) VALUES (5);
+      CREATE TABLE messages (
+        id               INTEGER PRIMARY KEY AUTOINCREMENT,
+        conversation_id  TEXT NOT NULL,
+        author_id        TEXT NOT NULL,
+        author_number    TEXT,
+        timestamp        INTEGER NOT NULL,
+        received_at      INTEGER NOT NULL,
+        direction        TEXT NOT NULL,
+        body             TEXT,
+        quote_author_id  TEXT,
+        quote_timestamp  INTEGER,
+        edited_timestamp INTEGER,
+        deleted          INTEGER NOT NULL DEFAULT 0,
+        UNIQUE(author_id, timestamp)
+      );
+      INSERT INTO messages (conversation_id, author_id, timestamp, received_at, direction, body)
+        VALUES ('group-1', 'alice', 1000, 1000, 'in', 'hello group');
+    `)
+    legacy.close()
+
+    // Reopen through openStore — the migration should fire.
+    const store = openStore(path, key)
+    const version = store.db.prepare('SELECT version FROM schema_meta').get() as { version: number }
+    expect(version.version).toBe(6)
+
+    // Existing row survived.
+    const rows = store.db.prepare('SELECT conversation_id, body FROM messages').all() as {
+      conversation_id: string
+      body: string
+    }[]
+    expect(rows).toEqual([{ conversation_id: 'group-1', body: 'hello group' }])
+
+    // The widened key now allows a same-(author,timestamp) message in a
+    // different conversation instead of overwriting the group message.
+    store.messages.upsert({
+      conversationId: 'dm-alice',
+      authorId: 'alice',
+      timestamp: 1000,
+      receivedAt: 2000,
+      direction: 'in',
+      body: 'sneaky dm',
+    })
+    const after = store.db
+      .prepare('SELECT conversation_id, body FROM messages ORDER BY conversation_id')
+      .all() as { conversation_id: string; body: string }[]
+    expect(after).toEqual([
+      { conversation_id: 'dm-alice', body: 'sneaky dm' },
+      { conversation_id: 'group-1', body: 'hello group' },
+    ])
     store.close()
   })
 
