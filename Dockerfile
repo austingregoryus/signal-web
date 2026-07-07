@@ -4,7 +4,12 @@
 FROM node:24-slim AS web
 WORKDIR /web
 COPY web/package.json web/package-lock.json ./
-RUN npm ci
+# Allow install scripts (host ~/.npmrc may set ignore-scripts=true). Removed
+# after install so it doesn't leak into anything that re-installs at runtime.
+RUN printf 'ignore-scripts=false\n' > /web/.npmrc && npm ci && rm -f /web/.npmrc
+# node_modules is excluded by .dockerignore so this COPY can't clobber the
+# install above with host-owned files (which is what caused "tsc: Permission
+# denied" when a Windows host's .bin symlinks lost their exec bit).
 COPY web/ ./
 RUN npm run build
 

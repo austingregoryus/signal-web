@@ -1,0 +1,20 @@
+# Exclude everything that shouldn't enter the Docker build context. The image
+# installs its own node_modules inside each stage; copying the host's would
+# clobber that (and on a Windows host the .bin symlinks lose their exec bit,
+# breaking builds with "tsc: Permission denied").
+
+**/node_modules/
+**/dist/
+.git/
+.gitignore
+.env
+.env.*
+!.env.example
+*.md
+docs/
+.kt/
+.superpowers/
+data/
+cloudflared/
+*.log
+.DS_Store
