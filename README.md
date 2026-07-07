@@ -78,7 +78,7 @@ messages **from the moment of linking forward** (no history backfill).
 ### 1. Clone and configure
 
 ```bash
-git clone https://github.com/your-username/signal-web.git
+git clone https://github.com/austingregoryus/signal-web.git
 cd signal-web
 cp .env.example .env
 ```
