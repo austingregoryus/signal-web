@@ -56,10 +56,10 @@ export async function main(): Promise<void> {
   })
   receiver.start()
 
-  // Attachments are sent as base64 JSON (~33% larger than the raw bytes), so the
-  // default 1 MB body limit rejects even modest photos with a 413. 25 MB lets a
-  // typical image through while staying well under signal-cli's own ceiling.
-  const app = Fastify({ trustProxy: config.trustProxy, bodyLimit: 25 * 1024 * 1024 })
+  // Default 1 MB body limit everywhere — unauthenticated routes (/auth/login)
+  // must not accept huge bodies. The two send routes that carry attachments
+  // raise their own limit (see UPLOAD_BODY_LIMIT in api/rest.ts).
+  const app = Fastify({ trustProxy: config.trustProxy })
 
   // Baseline security headers on EVERY response. Per-route headers (attachment
   // CSP, /link harden()) override since the hook only sets a header the response

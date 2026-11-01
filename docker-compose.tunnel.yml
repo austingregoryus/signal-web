@@ -17,7 +17,9 @@
 
 services:
   cloudflared:
-    image: cloudflare/cloudflared:latest
+    # Pinned (version + multi-arch digest) like the signal-cli image, so a tag
+    # push can't swap what runs in front of the app. Bump deliberately.
+    image: cloudflare/cloudflared:2026.10.7@sha256:4955524aeaa379e154023d5a027c250f7b35041a2e7e950cf13f144bc9b9c5ba
     restart: unless-stopped
     depends_on: [app]
     networks: [signalnet]

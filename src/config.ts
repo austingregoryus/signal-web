@@ -13,20 +13,31 @@ export interface AppConfig {
   rpOrigin: string
   attachmentDir: string
   secureCookies: boolean
-  trustProxy: number | boolean
+  trustProxy: string | boolean
   sessionTtlDays: number
   sessionIdleDays: number
 }
 
-function parseTrustProxy(raw: string | undefined): number | boolean {
-  if (raw === undefined) return 1
+// Default: trust only proxies on loopback or private (RFC 1918 / ULA) addresses.
+// The cloudflared sidecar reaches the app over the private Docker network, so
+// its forwarded client IP is honoured; a public address in the chain is never
+// trusted, so a forged X-Forwarded-For prefix can't move req.ip.
+const DEFAULT_TRUST_PROXY = 'loopback,uniquelocal'
+
+function parseTrustProxy(raw: string | undefined): string | boolean {
+  if (raw === undefined || raw.trim() === '') return DEFAULT_TRUST_PROXY
   if (raw === 'false') return false
   if (raw === 'true') return true
-  const hops = Number(raw)
-  if (!Number.isInteger(hops) || hops < 0) {
-    throw new Error('TRUST_PROXY must be "false", "true", or a non-negative integer hop count')
+  // Fastify >= 5.12 disables hop-count trust (it fails closed, so every request
+  // would share the proxy's IP and one attacker could trip the login lockout for
+  // everyone). Reject it loudly instead of silently degrading.
+  if (/^\d+$/.test(raw.trim())) {
+    throw new Error(
+      `TRUST_PROXY=${raw} (a hop count) is no longer supported. Remove it to use the default ` +
+        `("${DEFAULT_TRUST_PROXY}"), or set the proxy's IP/CIDR list, e.g. TRUST_PROXY=172.16.0.0/12`,
+    )
   }
-  return hops
+  return raw.trim()
 }
 
 export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
@@ -55,13 +66,11 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     rpOrigin,
     attachmentDir: env.ATTACHMENT_DIR ?? './data/attachments',
     secureCookies: (env.SECURE_COOKIES ?? 'true') !== 'false',
-    // Number of trusted reverse-proxy hops in front of us, counted from the
-    // socket peer inward. Behind a Cloudflare Tunnel the only hop is the
-    // cloudflared sidecar, so the default is 1 — this makes Fastify resolve
-    // req.ip to cloudflared's reported client IP and IGNORE any attacker-
-    // supplied X-Forwarded-For entries earlier in the chain. Setting a boolean
-    // (TRUST_PROXY=true) would trust the entire forged chain and let clients
-    // spoof req.ip to bypass the login rate limiter. TRUST_PROXY=false disables.
+    // Which proxy addresses may set X-Forwarded-For (IP/CIDR list or proxy-addr
+    // names). req.ip resolves to the first untrusted address walking back from
+    // the socket, i.e. the client IP cloudflared reported. TRUST_PROXY=true
+    // would trust the entire forged chain and let clients spoof req.ip to
+    // bypass the login rate limiter. TRUST_PROXY=false disables.
     trustProxy: parseTrustProxy(env.TRUST_PROXY),
     sessionTtlDays: Number(env.SESSION_TTL_DAYS ?? 30),
     sessionIdleDays: Number(env.SESSION_IDLE_DAYS ?? 7),

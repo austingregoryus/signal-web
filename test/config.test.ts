@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'vitest'
+import Fastify from 'fastify'
 import { loadConfig } from '../src/config'
 
 const base = { SIGNAL_NUMBER: '+15551234567', DB_KEY: 'k' }
@@ -34,7 +35,7 @@ describe('loadConfig', () => {
     expect(cfg.dbPath).toBe('./data/signal-web.db')
     expect(cfg.secureCookies).toBe(true)
     expect(cfg.attachmentDir).toBe('./data/attachments')
-    expect(cfg.trustProxy).toBe(1)
+    expect(cfg.trustProxy).toBe('loopback,uniquelocal')
     expect(cfg.sessionTtlDays).toBe(30)
     expect(cfg.sessionIdleDays).toBe(7)
     expect(cfg.publicUrl).toBe('http://localhost:8090')
@@ -55,17 +56,41 @@ describe('loadConfig', () => {
     expect(cfg.trustProxy).toBe(false)
   })
 
-  it('parses TRUST_PROXY as a trusted-hop count', () => {
-    expect(loadConfig({ ...base, TRUST_PROXY: '2' }).trustProxy).toBe(2)
-    expect(loadConfig({ ...base, TRUST_PROXY: '0' }).trustProxy).toBe(0)
+  it('passes an IP/CIDR TRUST_PROXY through', () => {
+    expect(loadConfig({ ...base, TRUST_PROXY: '172.18.0.0/16' }).trustProxy).toBe('172.18.0.0/16')
   })
 
   it('still allows TRUST_PROXY=true to trust the whole chain (opt-in)', () => {
     expect(loadConfig({ ...base, TRUST_PROXY: 'true' }).trustProxy).toBe(true)
   })
 
-  it('rejects a non-integer TRUST_PROXY', () => {
-    expect(() => loadConfig({ ...base, TRUST_PROXY: 'yes' })).toThrow(/TRUST_PROXY/)
-    expect(() => loadConfig({ ...base, TRUST_PROXY: '-1' })).toThrow(/TRUST_PROXY/)
+  it('rejects a hop-count TRUST_PROXY (Fastify no longer honours it)', () => {
+    expect(() => loadConfig({ ...base, TRUST_PROXY: '1' })).toThrow(/hop count/)
+    expect(() => loadConfig({ ...base, TRUST_PROXY: '0' })).toThrow(/hop count/)
+  })
+})
+
+describe('default TRUST_PROXY resolves the real client IP', () => {
+  async function ipFor(remoteAddress: string, xff?: string): Promise<string> {
+    const app = Fastify({ trustProxy: loadConfig({ ...base }).trustProxy })
+    app.get('/ip', async (req) => req.ip)
+    const res = await app.inject({
+      method: 'GET', url: '/ip', remoteAddress,
+      headers: xff ? { 'x-forwarded-for': xff } : {},
+    })
+    await app.close()
+    return res.body
+  }
+
+  it('uses the client IP the private-network proxy reported', async () => {
+    expect(await ipFor('172.18.0.3', '203.0.113.7')).toBe('203.0.113.7')
+  })
+
+  it('ignores a forged X-Forwarded-For prefix', async () => {
+    expect(await ipFor('172.18.0.3', '10.9.9.9, 198.51.100.1, 203.0.113.7')).toBe('203.0.113.7')
+  })
+
+  it('ignores X-Forwarded-For from a public (non-proxy) peer', async () => {
+    expect(await ipFor('203.0.113.7', '198.51.100.1')).toBe('203.0.113.7')
   })
 })

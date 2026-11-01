@@ -67,6 +67,20 @@ async function login(): Promise<{ session: string; csrf: string }> {
 }
 
 describe('REST API', () => {
+  it('keeps the 1 MB body limit on login but allows large attachment sends', async () => {
+    const big = 'A'.repeat(2 * 1024 * 1024)
+    const loginRes = await app.inject({ method: 'POST', url: '/auth/login', payload: { password: big } })
+    expect(loginRes.statusCode).toBe(413)
+
+    const { session, csrf } = await login()
+    const sendRes = await app.inject({
+      method: 'POST', url: '/api/send',
+      cookies: { sw_session: session, sw_csrf: csrf }, headers: { 'x-csrf-token': csrf },
+      payload: { conversationId: 'c1', type: 'dm', base64Attachments: [`data:image/png;base64,${big}`] },
+    })
+    expect(sendRes.statusCode).toBe(200)
+  })
+
   it('rejects unauthenticated access', async () => {
     const res = await app.inject({ method: 'GET', url: '/api/conversations' })
     expect(res.statusCode).toBe(401)

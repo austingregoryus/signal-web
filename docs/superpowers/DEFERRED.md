@@ -60,6 +60,11 @@ Cross-milestone TODOs surfaced during reviews. Each names the milestone that sho
   earlier than cloudflared's own. `TRUST_PROXY` is now a trusted-hop **count** (default `1` = the
   cloudflared sidecar), so Fastify resolves `req.ip` to cloudflared's reported client IP and
   ignores forged prefixes. Still don't expose the origin port directly.
+  **Superseded (review 2026-11-01):** Fastify ≤5.12.0 let hop-count trust be spoofed
+  (GHSA-3m5p-2c4r-xxw2), and Fastify 5.12.x now ignores numeric `trustProxy` entirely
+  (fails closed: every request shares the proxy's IP, so one attacker could lock out the
+  real user). `TRUST_PROXY` is now an IP/CIDR list defaulting to `loopback,uniquelocal`;
+  a numeric value is rejected at startup.
 
 ### Frontend / client contract (M5)
 - **Live events are "pokes."** The bridge broadcasts minimal live events

@@ -10,7 +10,7 @@ import type {
   PublicKeyCredentialRequestOptionsJSON,
   RegistrationResponseJSON,
   AuthenticationResponseJSON,
-  AuthenticatorTransportFuture,
+  AuthenticatorTransport,
 } from '@simplewebauthn/server'
 import type { WebAuthnRepo } from '../store/webauthnStore'
 
@@ -78,7 +78,7 @@ export async function startAuthentication(
     rpID: cfg.rpId,
     allowCredentials: creds.map((c) => ({
       id: c.id,
-      transports: c.transports as AuthenticatorTransportFuture[],
+      transports: c.transports as AuthenticatorTransport[],
     })),
     userVerification: 'preferred',
   })
@@ -106,7 +106,7 @@ export async function finishAuthentication(
         id: cred.id,
         publicKey: cred.publicKey.slice(),
         counter: cred.counter,
-        transports: cred.transports as AuthenticatorTransportFuture[],
+        transports: cred.transports as AuthenticatorTransport[],
       },
     })
     if (!verification.verified) return false

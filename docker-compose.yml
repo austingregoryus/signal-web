@@ -1,10 +1,18 @@
 services:
   signal-cli-rest-api:
     # Keep this current: Signal's servers reject outdated signal-cli clients during
-    # linking ("no data to encode"). 0.100 bundles signal-cli 0.14.5. Pinned to a
+    # linking ("no data to encode"). 0.101 bundles signal-cli 0.14.8. Pinned to a
     # digest so a malicious/buggy upstream tag push can't swap the image.
-    image: bbernhard/signal-cli-rest-api:0.100@sha256:2399d449123cdad56c4d859277e3b9127e1a00c4d2ab4601c239882609286cf8
+    # 0.101 is the first release where the image runs rootless (uid 1000); the
+    # user/tmpfs/security_opt lines below mirror upstream's compose for it — the
+    # writable /run tmpfs is what lets json-rpc mode's supervisor start as non-root.
+    image: bbernhard/signal-cli-rest-api:0.101@sha256:2cf09d66a86fdd210e42ee91662216364acc27da1163a8c44167a77ea3a6559a
     restart: unless-stopped
+    user: "1000:1000"
+    security_opt:
+      - no-new-privileges:true
+    tmpfs:
+      - /run:exec,size=64m,uid=1000,gid=1000,mode=0755
     environment:
       - MODE=json-rpc
     volumes:
@@ -18,6 +26,8 @@ services:
     env_file: .env
     depends_on: [signal-cli-rest-api]
     restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
     # Bind to 127.0.0.1 only — the app must NOT be reachable on the public IP;
     # external traffic arrives via the Cloudflare Tunnel (see DEPLOY.md). The
     # host port differs from the container's 8090 to dodge a Windows/WSL quirk

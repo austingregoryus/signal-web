@@ -43,7 +43,8 @@ PUBLIC_URL=https://signal.example.com
 ALLOWED_ORIGIN=https://signal.example.com
 RP_ID=example.com            # the registrable domain (for WebAuthn/passkeys)
 SECURE_COOKIES=true          # cookies carry Secure behind HTTPS
-TRUST_PROXY=1                # trusted proxy hops (1 = the cloudflared sidecar); never use `true`
+# Leave TRUST_PROXY unset: the default trusts only private-network proxies (the
+# cloudflared sidecar). Never use `true`; hop counts like `1` are rejected.
 
 # During initial linking only (set false after):
 ENABLE_LINK_PAGE=true
@@ -88,6 +89,9 @@ Once linked, **set a password** immediately:
 ```bash
 docker compose exec -e NEW_PASSWORD='a-strong-password' app npm run set-password
 ```
+
+Re-running `set-password` later also signs out every existing session, so use
+it whenever a computer that was logged in is lost or retired.
 
 Then **disable the linking page**: set `ENABLE_LINK_PAGE=false` in `.env`,
 switch back to the normal compose, and rebuild:
@@ -170,3 +174,8 @@ the password you set. Done.
   what the README expects.
 - **App container fails to start with a permission error on `/app/data`:** the
   bind mount isn't owned by uid 1000 — re-run `chown -R 1000:1000 data`.
+- **App exits with `TRUST_PROXY=1 (a hop count) is no longer supported`:** an
+  older `.env` still carries `TRUST_PROXY=1`. Delete that line.
+- **signal-cli container restarts after upgrading from 0.100:** 0.101 runs as
+  uid 1000. A `signal-cli-data` volume created by the old root image may need
+  `docker compose run --rm --user 0 --entrypoint chown signal-cli-rest-api -R 1000:1000 /home/.local/share/signal-cli`.

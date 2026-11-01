@@ -33,9 +33,16 @@ function parseAttachment(input: string): { contentType: string | null; base64: s
   return { contentType: null, base64: input, bytes: Buffer.from(input, 'base64') }
 }
 
+// Attachments are sent as base64 JSON (~33% larger than the raw bytes), so the
+// default 1 MB body limit rejects even modest photos with a 413. 25 MB lets a
+// typical image through while staying well under signal-cli's own ceiling.
+// Scoped to the send routes only; everything else keeps Fastify's 1 MB default.
+export const UPLOAD_BODY_LIMIT = 25 * 1024 * 1024
+
 export function registerRestApi(app: FastifyInstance, deps: RestDeps): void {
   const { store, client, selfId, blobs } = deps
   const auth = { preHandler: app.requireAuth }
+  const upload = { ...auth, bodyLimit: UPLOAD_BODY_LIMIT }
 
   app.get('/api/conversations', auth, async () => store.conversations.list())
 
@@ -137,7 +144,7 @@ export function registerRestApi(app: FastifyInstance, deps: RestDeps): void {
 
   app.post<{ Body: { conversationId: string; type: 'dm' | 'group'; message?: string; base64Attachments?: string[]; quoteTimestamp?: number; quoteAuthor?: string } }>(
     '/api/send',
-    auth,
+    upload,
     async (req, reply) => {
       const { type, message, base64Attachments, quoteTimestamp, quoteAuthor } = req.body
       // Resolve a number-keyed DM to its canonical UUID (in case a prior merge
@@ -207,7 +214,7 @@ export function registerRestApi(app: FastifyInstance, deps: RestDeps): void {
   // to the raw number if they aren't a known signal-cli contact yet.
   app.post<{ Body: { recipient: string; displayName?: string; message?: string; base64Attachments?: string[] } }>(
     '/api/start',
-    auth,
+    upload,
     async (req, reply) => {
       const { recipient, displayName, message, base64Attachments } = req.body
       if (!recipient || !/^\+[1-9]\d{6,14}$/.test(recipient)) {

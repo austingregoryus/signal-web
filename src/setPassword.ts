@@ -10,8 +10,11 @@ async function main(): Promise<void> {
   const config = loadConfig()
   const store = openStore(config.dbPath, config.dbKey)
   store.authConfig.setPasswordHash(await hashPassword(password))
+  // A password change must end every existing login (e.g. a lost or retired
+  // computer that still holds a session cookie).
+  store.sessions.revokeAll()
   store.close()
-  console.log('[set-password] password updated')
+  console.log('[set-password] password updated; all existing sessions signed out')
 }
 
 main().catch((err: unknown) => {

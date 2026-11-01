@@ -90,9 +90,17 @@ Edit `.env` and fill in:
 ```bash
 SIGNAL_NUMBER=+15551234567
 DB_KEY=<run: node -e "console.log(require('crypto').randomBytes(32).toString('base64'))">
+PUBLIC_URL=http://localhost:8190
 ENABLE_LINK_PAGE=true
 LINK_BOOTSTRAP_TOKEN=<run: openssl rand -base64 24, and paste the result>
 ```
+
+`PUBLIC_URL` must match the address in your browser's URL bar — the live
+WebSocket rejects any other origin, and messages then stop updating live.
+`localhost` counts as secure, so the default `SECURE_COOKIES=true` works there;
+if you instead open it from another machine over plain `http://<LAN-IP>:8190`,
+set both `PUBLIC_URL` to that address and `SECURE_COOKIES=false`, or login
+cookies are silently dropped.
 
 > **Keep `DB_KEY` stable and back it up.** It's the only thing that can decrypt
 > your message store; losing it loses all messages.
@@ -113,7 +121,7 @@ docker compose logs app
 ```
 
 You'll see a `[link]` line pointing to a URL like
-`http://localhost:8090/link?t=<LINK_BOOTSTRAP_TOKEN>`. Open that URL in a
+`http://localhost:8190/link?t=<LINK_BOOTSTRAP_TOKEN>`. Open that URL in a
 browser and scan the QR from
 **Signal → Settings → Linked Devices → Link New Device**.
 
@@ -194,7 +202,7 @@ signal-cli-rest-api. TypeScript throughout, no framework magic.
 npm install              # backend deps
 npm --prefix web install # frontend deps
 
-npm test                 # backend tests (176)
+npm test                 # backend tests (184)
 npm --prefix web test    # frontend tests (37)
 npm run typecheck        # backend tsc
 npm --prefix web run typecheck
@@ -244,10 +252,10 @@ this**. Use the official Signal apps, which are professionally audited.
 - **Auth:** password (Argon2id) gates a session; optional WebAuthn steps it up.
   Login attempts are per-IP rate-limited with a global backstop.
 - **Trust boundary:** the app trusts signal-cli (same Docker network) and the
-  reverse proxy (`TRUST_PROXY` is a trusted-hop count, default `1` for the
-  cloudflared sidecar, so the real client IP is resolved without letting clients
-  spoof `X-Forwarded-For` — **never expose the app port directly**). Everything
-  else is untrusted.
+  reverse proxy (`TRUST_PROXY` defaults to trusting only loopback/private-network
+  peers such as the cloudflared sidecar, so the real client IP is resolved
+  without letting clients spoof `X-Forwarded-For` — **never expose the app port
+  directly**). Everything else is untrusted.
 
 ### What this does NOT protect against
 
