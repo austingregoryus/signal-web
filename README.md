@@ -6,7 +6,7 @@ messages stay on infrastructure you control, encrypted at rest.
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](./LICENSE)
 ![Status](https://img.shields.io/badge/status-active-brightgreen)
-![Tests](https://img.shields.io/badge/tests-213%20passing-success)
+![Tests](https://img.shields.io/badge/tests-256%20passing-success)
 
 > ⚠️ **This is unofficial, community-built software.** It is not affiliated with,
 > endorsed by, or maintained by the Signal Foundation. Signal is a trademark of the
@@ -31,7 +31,9 @@ user: **you** (or whoever you set it up for).
 ## Features
 
 **Messaging**
-- Send and receive text, images, and file attachments
+- Send and receive text, images, and file attachments (paste or drag-drop images into the composer)
+- Clickable links and search across every conversation
+- Honors Signal disappearing-message timers; history window is configurable
 - Quote-reply, edit, and delete messages
 - Emoji picker, message reactions, typing indicators
 - Live updates over WebSocket (no refresh needed)
@@ -48,7 +50,8 @@ user: **you** (or whoever you set it up for).
 
 **Security**
 - SQLCipher-encrypted message store; the key never leaves your host
-- Password auth (Argon2id), optional WebAuthn/passkey 2FA
+- Password auth (Argon2id), optional WebAuthn/passkey 2FA (add a key under Settings)
+- Log out, or log out every device at once
 - CSRF protection, secure cookies, per-IP login rate limiting
 - Content-Security-Policy, HSTS, and hardening headers on every response
 - Runs as a non-root container user; signal-cli image digest-pinned
@@ -192,6 +195,7 @@ All config is via environment variables (`.env`). See
 | `RP_ID` | prod | The registrable domain (for WebAuthn/passkeys) |
 | `ENABLE_LINK_PAGE` | link | `true` only during device linking; `false` in production |
 | `LINK_BOOTSTRAP_TOKEN` | link | A random token you choose to gate `/link` before the password is set |
+| `MESSAGE_RETENTION_DAYS` | no | Delete messages older than this many days (default `14`; `0` keeps them forever). Disappearing-message timers set in Signal still apply. |
 
 ## Development
 
@@ -202,8 +206,8 @@ signal-cli-rest-api. TypeScript throughout, no framework magic.
 npm install              # backend deps
 npm --prefix web install # frontend deps
 
-npm test                 # backend tests (184)
-npm --prefix web test    # frontend tests (37)
+npm test                 # backend tests (199)
+npm --prefix web test    # frontend tests (57)
 npm run typecheck        # backend tsc
 npm --prefix web run typecheck
 npm run dev              # backend with watch (tsx)

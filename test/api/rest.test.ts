@@ -81,6 +81,19 @@ describe('REST API', () => {
     expect(sendRes.statusCode).toBe(200)
   })
 
+  it("applies the conversation's disappearing timer to a sent message", async () => {
+    store.conversations.setExpireTimer('c1', 60_000)
+    const { session, csrf } = await login()
+    const res = await app.inject({
+      method: 'POST', url: '/api/send',
+      cookies: { sw_session: session, sw_csrf: csrf }, headers: { 'x-csrf-token': csrf },
+      payload: { conversationId: 'c1', type: 'dm', message: 'poof' },
+    })
+    expect(res.statusCode).toBe(200)
+    const sent = store.messages.listByConversation('c1', 10, undefined, 0).find((m) => m.body === 'poof')
+    expect(sent?.expiresAt).toBe(111 + 60_000) // stub send timestamp + timer
+  })
+
   it('rejects an unauthenticated upload before reading its body', async () => {
     // Over the 25 MB route limit: if auth ran after body parsing this would be 413.
     const huge = 'A'.repeat(26 * 1024 * 1024)
@@ -100,6 +113,32 @@ describe('REST API', () => {
     const res = await app.inject({ method: 'GET', url: '/api/conversations', cookies: { sw_session: session } })
     expect(res.statusCode).toBe(200)
     expect(res.json()[0]).toMatchObject({ id: 'c1', displayName: 'Alice' })
+  })
+
+  it('searches message text across conversations, newest first', async () => {
+    store.conversations.ensure({ id: 'c2', type: 'group', displayName: 'Family' })
+    store.messages.upsert({ conversationId: 'c2', authorId: 'b', timestamp: 3000, direction: 'in', body: 'Dinner at Six?', receivedAt: 1 })
+    store.messages.upsert({ conversationId: 'c1', authorId: 'a', timestamp: 2000, direction: 'in', body: 'dinner was great', receivedAt: 1 })
+    store.messages.upsert({ conversationId: 'c1', authorId: 'a', timestamp: 2500, direction: 'in', body: '100% dinner', receivedAt: 1 })
+    store.messages.upsert({ conversationId: 'c1', authorId: 'a', timestamp: 2600, direction: 'in', body: 'dinner gone', receivedAt: 1, expiresAt: 1 })
+    store.messages.markDeleted('a', 2500)
+    const { session } = await login()
+    const get = (q: string) => app.inject({ method: 'GET', url: `/api/search?q=${encodeURIComponent(q)}`, cookies: { sw_session: session } })
+
+    const res = await get('DINNER')
+    expect(res.statusCode).toBe(200)
+    expect(res.json().results.map((r: { body: string; conversationName: string }) => [r.body, r.conversationName])).toEqual([
+      ['Dinner at Six?', 'Family'],
+      ['dinner was great', 'Alice'],
+    ])
+    // LIKE wildcards in the query are literal, and very short queries return nothing.
+    expect((await get('%%')).json().results).toEqual([]) // unescaped, this would match everything
+    expect((await get('d')).json().results).toEqual([])
+  })
+
+  it('requires auth to search', async () => {
+    const res = await app.inject({ method: 'GET', url: '/api/search?q=hi' })
+    expect(res.statusCode).toBe(401)
   })
 
   it('returns conversation history', async () => {

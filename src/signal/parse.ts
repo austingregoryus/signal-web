@@ -15,7 +15,10 @@ export type DomainEvent =
       quoteAuthorId?: string | null
       quoteTimestamp?: number | null
       attachments: AttachmentInput[]
+      /** Disappearing-message timer carried by the message (0 = off, undefined = unknown). */
+      expiresInSeconds?: number
     }
+  | { kind: 'timer'; conversationId: string; conversationType: 'dm' | 'group'; expiresInSeconds: number }
   | { kind: 'reaction'; targetAuthorId: string; targetTimestamp: number; reactorId: string; emoji: string; remove: boolean; timestamp: number }
   | { kind: 'delete'; targetAuthorId: string; targetTimestamp: number }
   | { kind: 'edit'; targetAuthorId: string; targetTimestamp: number; newBody: string; editedTimestamp: number }
@@ -120,8 +123,18 @@ export function parseEnvelope(raw: RawEnvelope, selfId: string): DomainEvent[] {
     conversationType = 'dm'
   }
 
+  const expiresInSeconds = typeof payload.expiresInSeconds === 'number' && payload.expiresInSeconds >= 0
+    ? payload.expiresInSeconds
+    : undefined
   const attachments = attachmentsFrom(payload, ownerId, msgTs)
-  if (payload.message == null && attachments.length === 0) return [{ kind: 'ignore' }]
+  if (payload.message == null && attachments.length === 0) {
+    // A bodiless "disappearing messages set to X" notice still updates the
+    // conversation's timer, so our own later sends expire on schedule too.
+    if (payload.isExpirationUpdate && expiresInSeconds !== undefined) {
+      return [{ kind: 'timer', conversationId, conversationType, expiresInSeconds }]
+    }
+    return [{ kind: 'ignore' }]
+  }
 
   return [{
     kind: 'message',
@@ -138,5 +151,6 @@ export function parseEnvelope(raw: RawEnvelope, selfId: string): DomainEvent[] {
         : null,
     quoteTimestamp: payload.quote?.id ?? null,
     attachments,
+    ...(expiresInSeconds !== undefined ? { expiresInSeconds } : {}),
   }]
 }

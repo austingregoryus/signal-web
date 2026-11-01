@@ -59,6 +59,15 @@ genuinely lost it, you must re-link the device (which creates a new empty DB)
 and accept that historical messages are gone — Signal servers don't re-deliver
 history to a freshly-linked device beyond what's in the user's existing devices.
 
+### Lost the security key (2FA)
+If a security key or passkey added under **Settings** is lost or broken, nobody
+can finish logging in. Remove every registered key (this also signs out all
+sessions), then log in with just the password and add a new key:
+
+```bash
+docker compose exec app npm run reset-security-keys
+```
+
 ### Lost the signal-cli device keys (the named volume)
 Re-link the device: temporarily set `ENABLE_LINK_PAGE=true`, run the linking
 override compose (`docker-compose.link.yml`), scan the QR from your phone, set a

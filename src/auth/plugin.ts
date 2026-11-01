@@ -114,6 +114,13 @@ export async function authPlugin(app: FastifyInstance, opts: AuthPluginOptions):
     return startRegistration(store.webauthn, webauthn, 'signal-web-user', Date.now())
   })
 
+  // Registered keys, for the settings panel. Never exposes public keys. There is
+  // deliberately no delete route: a stolen session must not be able to strip 2FA.
+  // Key-loss recovery is the `npm run reset-security-keys` CLI on the server.
+  app.get('/auth/webauthn/credentials', { preHandler: app.requireAuth }, async () => {
+    return store.webauthn.listCredentials().map((c) => ({ id: c.id, createdAt: c.createdAt, transports: c.transports }))
+  })
+
   app.post('/auth/webauthn/register/verify', { preHandler: app.requireAuth }, async (req, reply) => {
     const ok = await finishRegistration(store.webauthn, webauthn, req.body as never, Date.now())
     return reply.code(ok ? 200 : 400).send({ ok })

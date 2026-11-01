@@ -169,6 +169,10 @@ the password you set. Done.
 - **WebAuthn/passkey fails to register:** `RP_ID` must be the registrable
   domain (e.g. `example.com`, not `signal.example.com`), and `PUBLIC_URL` must
   be the exact HTTPS origin.
+- **Security key lost, can't log in:** run
+  `docker compose exec app npm run reset-security-keys`. It removes every
+  registered key and signs out all sessions; logging in then needs only the
+  password, and a new key can be added under Settings.
 - **Can't send/receive after a signal-cli bump:** Signal's servers reject
   outdated clients. Check the `bbernhard/signal-cli-rest-api` version matches
   what the README expects.

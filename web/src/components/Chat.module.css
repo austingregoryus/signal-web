@@ -81,6 +81,21 @@
 }
 
 .newBtn:hover { background: var(--accent-hover); }
+
+.settingsBtn {
+  width: 32px;
+  height: 32px;
+  margin-left: auto;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--muted);
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+.settingsBtn:hover { background: var(--hover-tint); color: var(--fg); }
 .newBtn:active { transform: scale(.92); }
 
 .main {
@@ -88,6 +103,12 @@
   flex-direction: column;
   min-height: 0;
   background: var(--bg);
+}
+
+/* Files are being dragged over the open thread. */
+.main.dragging {
+  outline: 2px dashed var(--accent);
+  outline-offset: -8px;
 }
 
 .empty {
@@ -141,6 +162,29 @@
   letter-spacing: -0.01em;
   overflow: hidden;
   text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Search box under the sidebar header. */
+.searchBar { padding: 10px 12px 2px; }
+.search {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 9px 14px;
+  border: 1px solid var(--border-strong);
+  border-radius: 18px;
+  background: var(--bg);
+  color: var(--fg);
+  font: inherit;
+  font-size: .9rem;
+  outline: none;
+}
+.search:focus-visible { border-color: var(--accent); }
+
+.timerLabel {
+  flex-shrink: 0;
+  font-size: .78rem;
+  color: var(--muted);
   white-space: nowrap;
 }
 

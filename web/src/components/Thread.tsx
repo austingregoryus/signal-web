@@ -5,7 +5,7 @@ import styles from './Thread.module.css'
 
 export function Thread({
   conversationId = null, messages, onReact, onReply, onEdit, hasMore, loadingMore, onLoadMore, typing,
-  isGroup = false, resolveName,
+  isGroup = false, resolveName, highlightKey = null,
 }: {
   conversationId?: string | null
   messages: Msg[]
@@ -21,6 +21,8 @@ export function Thread({
   isGroup?: boolean
   /** Resolve an author id/number to a display name (for group sender labels). */
   resolveName?: (authorId: string, authorNumber: string | null) => string | null
+  /** "authorId:timestamp" of a message to scroll to and flash (from search). */
+  highlightKey?: string | null
 }): React.JSX.Element {
   const scrollRef = useRef<HTMLDivElement | null>(null)
   const prevHeightRef = useRef<number | null>(null)
@@ -64,6 +66,20 @@ export function Thread({
     if (nearBottom) el.scrollTop = el.scrollHeight
   }, [messages.length, typing])
 
+  // Jump to the highlighted message once it's loaded (it may take a few pages
+  // of history). Runs after the bottom-scroll above, so it wins; only once per key.
+  const jumpedRef = useRef<string | null>(null)
+  useEffect(() => {
+    if (!highlightKey) { jumpedRef.current = null; return }
+    if (jumpedRef.current === highlightKey) return
+    const el = Array.from(scrollRef.current?.querySelectorAll<HTMLElement>('[data-msg-key]') ?? [])
+      .find((n) => n.dataset.msgKey === highlightKey)
+    if (!el) return
+    jumpedRef.current = highlightKey
+    justOpenedRef.current = false
+    el.scrollIntoView?.({ block: 'center' })
+  }, [highlightKey, messages])
+
   // Detect scroll-to-top to load more history. Captures the height before the
   // async prepend so the effect above can restore the user's position.
   function onScroll(): void {
@@ -102,6 +118,7 @@ export function Thread({
             quoteOf={quoteOf}
             showSender={isGroup && m.direction === 'in'}
             resolveName={resolveName}
+            highlighted={highlightKey === `${m.authorId}:${m.timestamp}`}
           />
         )
       })}

@@ -10,12 +10,20 @@ export interface MessageInput {
   quoteAuthorId?: string | null
   quoteTimestamp?: number | null
   receivedAt: number
+  /** Disappearing message: delete at this ms time (null = keep). */
+  expiresAt?: number | null
 }
 
 export interface StoredMessage extends MessageInput {
   id: number
   editedTimestamp: number | null
   deleted: 0 | 1
+  expiresAt: number | null
+}
+
+export interface SearchHit extends StoredMessage {
+  conversationName: string | null
+  conversationType: 'dm' | 'group' | null
 }
 
 interface Row {
@@ -31,6 +39,7 @@ interface Row {
   quote_timestamp: number | null
   edited_timestamp: number | null
   deleted: 0 | 1
+  expires_at: number | null
 }
 
 function toStored(r: Row): StoredMessage {
@@ -47,7 +56,13 @@ function toStored(r: Row): StoredMessage {
     quoteTimestamp: r.quote_timestamp,
     editedTimestamp: r.edited_timestamp,
     deleted: r.deleted,
+    expiresAt: r.expires_at,
   }
+}
+
+/** Escape LIKE wildcards so user input matches literally (paired with ESCAPE '\'). */
+function likeEscape(s: string): string {
+  return s.replace(/[\\%_]/g, (c) => `\\${c}`)
 }
 
 export class MessageRepo {
@@ -56,14 +71,15 @@ export class MessageRepo {
   upsert(m: MessageInput): void {
     // On conflict (same author+timestamp+conversation, i.e. a redelivered
     // envelope), update only body/quote — never touch deleted/edited, so a
-    // redelivered envelope cannot resurrect a tombstoned or edited message.
+    // redelivered envelope cannot resurrect a tombstoned or edited message
+    // (nor push back a disappearing message's expiry).
     this.db
       .prepare(
         `INSERT INTO messages
            (conversation_id, author_id, author_number, timestamp, received_at,
-            direction, body, quote_author_id, quote_timestamp)
+            direction, body, quote_author_id, quote_timestamp, expires_at)
          VALUES (@conversationId, @authorId, @authorNumber, @timestamp, @receivedAt,
-                 @direction, @body, @quoteAuthorId, @quoteTimestamp)
+                 @direction, @body, @quoteAuthorId, @quoteTimestamp, @expiresAt)
          ON CONFLICT(author_id, timestamp, conversation_id) DO UPDATE SET
            body            = CASE
              WHEN messages.deleted = 1 OR messages.edited_timestamp IS NOT NULL
@@ -83,6 +99,7 @@ export class MessageRepo {
         body: m.body ?? null,
         quoteAuthorId: m.quoteAuthorId ?? null,
         quoteTimestamp: m.quoteTimestamp ?? null,
+        expiresAt: m.expiresAt ?? null,
       })
   }
 
@@ -92,16 +109,35 @@ export class MessageRepo {
    * lets the client load the newest N first, then fetch older batches as the
    * user scrolls up. Omit it for the initial newest-first page.
    */
-  listByConversation(conversationId: string, limit: number, beforeTimestamp?: number): StoredMessage[] {
+  listByConversation(conversationId: string, limit: number, beforeTimestamp?: number, now = Date.now()): StoredMessage[] {
+    // Expired disappearing messages are hidden even before the sweep deletes them.
+    const live = '(expires_at IS NULL OR expires_at > ?)'
     const sql = beforeTimestamp != null
-      ? `SELECT * FROM messages WHERE conversation_id = ? AND timestamp < ?
+      ? `SELECT * FROM messages WHERE conversation_id = ? AND timestamp < ? AND ${live}
          ORDER BY timestamp DESC LIMIT ?`
-      : `SELECT * FROM messages WHERE conversation_id = ?
+      : `SELECT * FROM messages WHERE conversation_id = ? AND ${live}
          ORDER BY timestamp DESC LIMIT ?`
     const rows = (beforeTimestamp != null
-      ? this.db.prepare(sql).all(conversationId, beforeTimestamp, limit)
-      : this.db.prepare(sql).all(conversationId, limit)) as Row[]
+      ? this.db.prepare(sql).all(conversationId, beforeTimestamp, now, limit)
+      : this.db.prepare(sql).all(conversationId, now, limit)) as Row[]
     return rows.map(toStored)
+  }
+
+  /**
+   * Case-insensitive substring search over message text across all
+   * conversations, newest-first. Skips deleted and expired messages.
+   */
+  search(query: string, limit: number, now = Date.now()): SearchHit[] {
+    const rows = this.db
+      .prepare(
+        `SELECT m.*, c.display_name AS conversation_name, c.type AS conversation_type
+         FROM messages m LEFT JOIN conversations c ON c.id = m.conversation_id
+         WHERE m.deleted = 0 AND m.body LIKE ? ESCAPE '\\'
+           AND (m.expires_at IS NULL OR m.expires_at > ?)
+         ORDER BY m.timestamp DESC LIMIT ?`,
+      )
+      .all(`%${likeEscape(query)}%`, now, limit) as Array<Row & { conversation_name: string | null; conversation_type: 'dm' | 'group' | null }>
+    return rows.map((r) => ({ ...toStored(r), conversationName: r.conversation_name, conversationType: r.conversation_type }))
   }
 
   markDeleted(authorId: string, timestamp: number): void {

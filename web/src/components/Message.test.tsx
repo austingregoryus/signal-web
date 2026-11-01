@@ -32,6 +32,21 @@ describe('Message', () => {
     expect(screen.queryByRole('button', { name: /reply/i })).toBeNull()
   })
 
+  it('renders URLs as links that open in a new tab', () => {
+    render(<Message m={{ ...base, body: 'look at https://example.com/x now' }} />)
+    const link = screen.getByRole('link', { name: 'https://example.com/x' })
+    expect(link).toHaveAttribute('href', 'https://example.com/x')
+    expect(link).toHaveAttribute('target', '_blank')
+    expect(link).toHaveAttribute('rel', 'noopener noreferrer')
+  })
+
+  it('marks a disappearing message', () => {
+    const { rerender } = render(<Message m={base} />)
+    expect(screen.queryByLabelText('Disappearing message')).toBeNull()
+    rerender(<Message m={{ ...base, expiresAt: 99_999 }} />)
+    expect(screen.getByLabelText('Disappearing message')).toBeInTheDocument()
+  })
+
   it('shows an edit button only on own outgoing text messages', () => {
     const onEdit = vi.fn()
     // Inbound message: no edit button.

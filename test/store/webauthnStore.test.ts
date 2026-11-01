@@ -17,6 +17,14 @@ function open(): Store {
 }
 
 describe('WebAuthnRepo', () => {
+  it('clearAll removes every credential', () => {
+    const s = open()
+    s.webauthn.addCredential({ id: 'a', publicKey: new Uint8Array([1]), counter: 0, transports: [], createdAt: 1 })
+    s.webauthn.addCredential({ id: 'b', publicKey: new Uint8Array([2]), counter: 0, transports: [], createdAt: 2 })
+    expect(s.webauthn.clearAll()).toBe(2)
+    expect(s.webauthn.hasCredential()).toBe(false)
+  })
+
   it('takeChallenge is one-time-use', () => {
     const s = open()
     s.webauthn.saveChallenge('chal-1', 1000)

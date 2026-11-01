@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import { api, ApiError } from '../api/client'
+import { api, ApiError, onUnauthorized } from '../api/client'
 import type { LoginResult } from '../api/types'
 import { runWebAuthnLogin } from './webauthn'
 
@@ -15,6 +15,13 @@ export function useAuth() {
       .then(() => { if (alive) setState('authed') })
       .catch((e) => { if (alive) setState(e instanceof ApiError && e.status === 401 ? 'anon' : 'anon') })
     return () => { alive = false }
+  }, [])
+
+  // Session ended underneath us (expired, or logged out from another device):
+  // drop back to the login screen instead of failing every request silently.
+  useEffect(() => {
+    onUnauthorized(() => setState('anon'))
+    return () => onUnauthorized(null)
   }, [])
 
   const login = useCallback(async (password: string) => {

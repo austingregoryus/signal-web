@@ -17,6 +17,10 @@ export interface DataMessagePayload {
   destination?: string
   destinationNumber?: string
   editMessage?: { targetSentTimestamp?: number; dataMessage?: { message?: string } }
+  /** The conversation's disappearing-message timer at send time (0 = off). */
+  expiresInSeconds?: number | null
+  /** True for the bodiless "timer changed" notice. */
+  isExpirationUpdate?: boolean
 }
 
 export interface RawEnvelope {

@@ -32,6 +32,11 @@ export async function startRegistration(
     userName: userId,
     attestationType: 'none',
     authenticatorSelection: { residentKey: 'preferred', userVerification: 'preferred' },
+    // Stop the same authenticator from being registered twice.
+    excludeCredentials: repo.listCredentials().map((c) => ({
+      id: c.id,
+      transports: c.transports as AuthenticatorTransport[],
+    })),
   })
   repo.saveChallenge(options.challenge, now)
   return options

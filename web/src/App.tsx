@@ -32,7 +32,7 @@ export function App(): React.JSX.Element {
   let body: React.JSX.Element
   if (auth.state === 'loading') body = <div className="app-shell">Loading…</div>
   else if (auth.state === 'anon') body = <Login onSubmit={auth.login} error={auth.error} />
-  else body = <Chat />
+  else body = <Chat onLogout={auth.logout} />
   return (
     <ErrorBoundary>
       <ToastProvider>{body}</ToastProvider>

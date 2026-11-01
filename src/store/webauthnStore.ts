@@ -72,6 +72,11 @@ export class WebAuthnRepo {
     this.db.prepare('UPDATE webauthn_credentials SET counter = ? WHERE id = ?').run(counter, id)
   }
 
+  /** Remove every registered credential (key-loss recovery; CLI only). */
+  clearAll(): number {
+    return this.db.prepare('DELETE FROM webauthn_credentials').run().changes
+  }
+
   hasCredential(): boolean {
     const row = this.db.prepare('SELECT COUNT(*) AS n FROM webauthn_credentials').get() as { n: number }
     return row.n > 0

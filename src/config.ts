@@ -16,6 +16,17 @@ export interface AppConfig {
   trustProxy: string | boolean
   sessionTtlDays: number
   sessionIdleDays: number
+  /** Delete messages older than this many days; 0 = keep forever. */
+  retentionDays: number
+}
+
+function parseRetentionDays(raw: string | undefined): number {
+  if (raw === undefined || raw.trim() === '') return 14
+  const days = Number(raw)
+  if (!Number.isFinite(days) || days < 0) {
+    throw new Error('MESSAGE_RETENTION_DAYS must be a number of days >= 0 (0 = keep forever)')
+  }
+  return days
 }
 
 // Default: trust only proxies on loopback or private (RFC 1918 / ULA) addresses.
@@ -74,5 +85,6 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     trustProxy: parseTrustProxy(env.TRUST_PROXY),
     sessionTtlDays: Number(env.SESSION_TTL_DAYS ?? 30),
     sessionIdleDays: Number(env.SESSION_IDLE_DAYS ?? 7),
+    retentionDays: parseRetentionDays(env.MESSAGE_RETENTION_DAYS),
   }
 }

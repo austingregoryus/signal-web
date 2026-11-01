@@ -14,6 +14,8 @@ export interface StoredConversation {
   lastActivity: number
   lastReadAt: number
   unreadCount: number
+  /** Disappearing-message timer in ms (0 = off). */
+  expireTimerMs: number
 }
 
 interface Row {
@@ -23,6 +25,7 @@ interface Row {
   avatar_path: string | null
   last_activity: number
   last_read_at: number
+  expire_timer_ms: number
 }
 
 export class ConversationRepo {
@@ -68,8 +71,21 @@ export class ConversationRepo {
         lastActivity: r.last_activity,
         lastReadAt: r.last_read_at,
         unreadCount: unread,
+        expireTimerMs: r.expire_timer_ms,
       }
     })
+  }
+
+  /** Record the conversation's disappearing-message timer (0 = off). */
+  setExpireTimer(id: string, ms: number): void {
+    this.db.prepare('UPDATE conversations SET expire_timer_ms = ? WHERE id = ?').run(ms, id)
+  }
+
+  getExpireTimer(id: string): number {
+    const row = this.db.prepare('SELECT expire_timer_ms FROM conversations WHERE id = ?').get(id) as
+      | { expire_timer_ms: number }
+      | undefined
+    return row?.expire_timer_ms ?? 0
   }
 
   /** Mark a conversation read up to `now` (clears its unread badge). */

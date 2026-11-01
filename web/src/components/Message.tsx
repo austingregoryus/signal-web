@@ -2,10 +2,11 @@ import type { Message as Msg } from '../api/types'
 import { Reactions } from './Reactions'
 import { Attachment } from './Attachment'
 import { avatarColor, initials } from './avatar'
+import { linkify } from './linkify'
 import styles from './Message.module.css'
 
 export function Message({
-  m, onReact, onReply, onEdit, quoteOf, compact, showSender, resolveName,
+  m, onReact, onReply, onEdit, quoteOf, compact, showSender, resolveName, highlighted,
 }: {
   m: Msg
   onReact?: (emoji: string) => void
@@ -17,6 +18,8 @@ export function Message({
   showSender?: boolean
   /** Resolve an author id/number to a display name (for group sender labels). */
   resolveName?: (authorId: string, authorNumber: string | null) => string | null
+  /** Flash this message (it was picked from search). */
+  highlighted?: boolean
 }): React.JSX.Element {
   const time = new Date(m.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
   // Outgoing receipt state, in increasing significance: sent < delivered < read.
@@ -34,7 +37,10 @@ export function Message({
   const canEdit = m.direction === 'out' && !m.deleted && m.body != null && m.body !== ''
   const senderName = showSender && !compact ? (resolveName?.(m.authorId, m.authorNumber) ?? m.authorNumber ?? m.authorId) : null
   return (
-    <div className={`${styles.row} ${m.direction === 'out' ? styles.out : styles.in} ${compact ? styles.compact : ''}`}>
+    <div
+      className={`${styles.row} ${m.direction === 'out' ? styles.out : styles.in} ${compact ? styles.compact : ''} ${highlighted ? styles.highlighted : ''}`}
+      data-msg-key={`${m.authorId}:${m.timestamp}`}
+    >
       {senderName ? (
         <span className={styles.senderAvatar} style={{ background: avatarColor(m.authorId) }} aria-hidden>
           {initials(senderName)}
@@ -50,10 +56,17 @@ export function Message({
         {m.deleted ? (
           <em className={styles.deleted}>This message was deleted</em>
         ) : (
-          <span className={styles.body}>{m.body}</span>
+          <span className={styles.body}>
+            {m.body
+              ? linkify(m.body).map((p, i) => p.href
+                ? <a key={i} className={styles.link} href={p.href} target="_blank" rel="noopener noreferrer">{p.text}</a>
+                : p.text)
+              : null}
+          </span>
         )}
         {m.attachments.map((a) => <Attachment key={a.id} meta={a} />)}
         <span className={styles.meta}>
+          {m.expiresAt ? <span title="Disappearing message" aria-label="Disappearing message">⏱ </span> : null}
           {m.editedTimestamp && !m.deleted ? <span className={styles.edited}>edited · </span> : null}
           {time}
           {receiptState === 'sent' ? <span className={styles.tick}> · Sent</span> : null}

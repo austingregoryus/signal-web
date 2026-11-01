@@ -56,6 +56,14 @@ describe('loadConfig', () => {
     expect(cfg.trustProxy).toBe(false)
   })
 
+  it('parses MESSAGE_RETENTION_DAYS (default 14, 0 = keep forever)', () => {
+    expect(loadConfig({ ...base }).retentionDays).toBe(14)
+    expect(loadConfig({ ...base, MESSAGE_RETENTION_DAYS: '90' }).retentionDays).toBe(90)
+    expect(loadConfig({ ...base, MESSAGE_RETENTION_DAYS: '0' }).retentionDays).toBe(0)
+    expect(() => loadConfig({ ...base, MESSAGE_RETENTION_DAYS: '-1' })).toThrow(/MESSAGE_RETENTION_DAYS/)
+    expect(() => loadConfig({ ...base, MESSAGE_RETENTION_DAYS: 'lots' })).toThrow(/MESSAGE_RETENTION_DAYS/)
+  })
+
   it('passes an IP/CIDR TRUST_PROXY through', () => {
     expect(loadConfig({ ...base, TRUST_PROXY: '172.18.0.0/16' }).trustProxy).toBe('172.18.0.0/16')
   })

@@ -19,6 +19,9 @@ export function ingestEnvelope(store: Store, raw: RawEnvelope, selfId: string, n
           store.conversations.linkAlias(ev.authorNumber, ev.conversationId)
           store.conversations.mergeInto(ev.conversationId, ev.authorNumber)
         }
+        if (ev.expiresInSeconds !== undefined) {
+          store.conversations.setExpireTimer(ev.conversationId, ev.expiresInSeconds * 1000)
+        }
         store.messages.upsert({
           conversationId: ev.conversationId,
           authorId: ev.authorId,
@@ -29,6 +32,7 @@ export function ingestEnvelope(store: Store, raw: RawEnvelope, selfId: string, n
           quoteAuthorId: ev.quoteAuthorId ?? null,
           quoteTimestamp: ev.quoteTimestamp ?? null,
           receivedAt: now,
+          expiresAt: expiryFor(ev.expiresInSeconds, ev.direction === 'out' ? ev.timestamp : now),
         })
         for (const a of ev.attachments) store.attachments.add(a)
         store.conversations.touch(ev.conversationId, ev.timestamp)
@@ -63,8 +67,21 @@ export function ingestEnvelope(store: Store, raw: RawEnvelope, selfId: string, n
           timestamp: ev.timestamp,
         })
         break
+      case 'timer':
+        store.conversations.ensure({ id: ev.conversationId, type: ev.conversationType })
+        store.conversations.setExpireTimer(ev.conversationId, ev.expiresInSeconds * 1000)
+        break
       case 'ignore':
         break
     }
   }
+}
+
+/**
+ * When a disappearing message should be deleted here. Signal starts the timer
+ * when the recipient reads the message; we start it on arrival instead (sends:
+ * at send time), so the web copy is never kept longer than the sender intended.
+ */
+export function expiryFor(expiresInSeconds: number | undefined, startMs: number): number | null {
+  return expiresInSeconds && expiresInSeconds > 0 ? startMs + expiresInSeconds * 1000 : null
 }

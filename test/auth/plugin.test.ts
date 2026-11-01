@@ -114,6 +114,31 @@ describe('authPlugin', () => {
     expect(protectedRes.statusCode).toBe(401)
   })
 
+  it('lists registered security keys without exposing public keys', async () => {
+    store.webauthn.addCredential({ id: 'c1', publicKey: new Uint8Array([9, 9]), counter: 0, transports: ['usb'], createdAt: 5 })
+    const login = await app.inject({ method: 'POST', url: '/auth/login', payload: { password: 'hunter2hunter2' } })
+    store.sessions.upgrade(cookieFrom(login, 'sw_session')!) // simulate the completed 2FA step
+    const res = await app.inject({ method: 'GET', url: '/auth/webauthn/credentials', cookies: { sw_session: cookieFrom(login, 'sw_session')! } })
+    expect(res.statusCode).toBe(200)
+    expect(res.json()).toEqual([{ id: 'c1', createdAt: 5, transports: ['usb'] }])
+    const anon = await app.inject({ method: 'GET', url: '/auth/webauthn/credentials' })
+    expect(anon.statusCode).toBe(401)
+  })
+
+  it('excludes already-registered keys from new registration options', async () => {
+    store.webauthn.addCredential({ id: 'Y3JlZDE', publicKey: new Uint8Array([1]), counter: 0, transports: ['usb'], createdAt: 1 })
+    const login = await app.inject({ method: 'POST', url: '/auth/login', payload: { password: 'hunter2hunter2' } })
+    const session = cookieFrom(login, 'sw_session')!
+    const csrf = cookieFrom(login, 'sw_csrf')!
+    store.sessions.upgrade(session)
+    const res = await app.inject({
+      method: 'POST', url: '/auth/webauthn/register/options',
+      cookies: { sw_session: session, sw_csrf: csrf }, headers: { 'x-csrf-token': csrf },
+    })
+    expect(res.statusCode).toBe(200)
+    expect(res.json().excludeCredentials.map((c: { id: string }) => c.id)).toEqual(['Y3JlZDE'])
+  })
+
   it('locks out after repeated wrong passwords', async () => {
     for (let i = 0; i < 3; i++) {
       await app.inject({ method: 'POST', url: '/auth/login', payload: { password: 'wrong' } })

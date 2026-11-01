@@ -98,6 +98,17 @@ export function openStore(path: string, key: string): Store {
   if (!columns.includes('last_read_at')) {
     db.exec("ALTER TABLE conversations ADD COLUMN last_read_at INTEGER NOT NULL DEFAULT 0")
   }
+  if (!columns.includes('expire_timer_ms')) {
+    db.exec("ALTER TABLE conversations ADD COLUMN expire_timer_ms INTEGER NOT NULL DEFAULT 0")
+  }
+  // Runs after the v6 rebuild above, which recreates messages without this column.
+  const messageColumns = (db.prepare('PRAGMA table_info(messages)').all() as { name: string }[])
+    .map((c) => c.name)
+  if (!messageColumns.includes('expires_at')) {
+    db.exec('ALTER TABLE messages ADD COLUMN expires_at INTEGER')
+  }
+  // Created here, not in SCHEMA_SQL: on an old DB the column doesn't exist until now.
+  db.exec('CREATE INDEX IF NOT EXISTS idx_messages_expires ON messages(expires_at) WHERE expires_at IS NOT NULL')
 
   const messages = new MessageRepo(db)
   const conversations = new ConversationRepo(db)

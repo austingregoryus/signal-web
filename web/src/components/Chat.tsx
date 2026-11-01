@@ -1,19 +1,23 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState, type DragEvent } from 'react'
 import { api } from '../api/client'
-import type { Conversation, Message } from '../api/types'
+import type { Conversation, Message, SearchHit } from '../api/types'
 import { useLiveSocket } from '../api/live'
 import { ConversationList } from './ConversationList'
 import { Thread } from './Thread'
-import { Composer } from './Composer'
+import { Composer, type ComposerHandle } from './Composer'
 import { NewConversation } from './NewConversation'
 import { ConfirmDialog } from './ConfirmDialog'
 import { ConversationInfo } from './ConversationInfo'
+import { Settings } from './Settings'
+import { SearchResults } from './SearchResults'
 import { useToast } from './Toast'
 import { avatarColor, initials } from './avatar'
+import { formatTimer } from './formatTimer'
 import styles from './Chat.module.css'
 
-export function Chat(): React.JSX.Element {
+export function Chat({ onLogout }: { onLogout?: () => void | Promise<void> } = {}): React.JSX.Element {
   const toast = useToast()
+  const [showSettings, setShowSettings] = useState(false)
   const [conversations, setConversations] = useState<Conversation[]>([])
   const [selected, setSelected] = useState<string | null>(null)
   const [messages, setMessages] = useState<Message[]>([])
@@ -23,6 +27,15 @@ export function Chat(): React.JSX.Element {
   const [editing, setEditing] = useState<Message | null>(null)
   const [pendingDelete, setPendingDelete] = useState<Conversation | null>(null)
   const [showInfo, setShowInfo] = useState(false)
+  const composerRef = useRef<ComposerHandle | null>(null)
+  const [dragging, setDragging] = useState(false)
+  const dragDepth = useRef(0) // dragenter/leave fire for every child; count to know when we really left
+  const [query, setQuery] = useState('')
+  const [results, setResults] = useState<SearchHit[]>([])
+  const [searching, setSearching] = useState(false)
+  // The message to scroll to and flash after picking a search result.
+  const [highlight, setHighlight] = useState<{ conversationId: string; key: string } | null>(null)
+  const highlightPages = useRef(0)
   const typingTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
   const lastSeenRef = useRef(0)
   // Mirror of `selected` for reading inside async callbacks without capturing
@@ -102,6 +115,16 @@ export function Chat(): React.JSX.Element {
     })
   }, [])
 
+  useEffect(() => {
+    if (!highlight || highlight.conversationId !== selected || loadingMore) return
+    // Wait for this conversation's messages (the previous thread's may still be showing).
+    if (messages.length === 0 || messages[0].conversationId !== selected) return
+    if (messages.some((m) => `${m.authorId}:${m.timestamp}` === highlight.key)) return
+    if (!hasMore || highlightPages.current >= 20) return // give up quietly; the thread is still open
+    highlightPages.current++
+    void loadMore(selected, messages[0].timestamp)
+  }, [highlight, selected, messages, hasMore, loadingMore, loadMore])
+
   useEffect(() => { void loadConversations() }, [loadConversations])
   useEffect(() => { if (selected) void loadThread(selected) }, [selected, loadThread])
   useEffect(() => { setShowInfo(false); setReplyTo(null); setEditing(null) }, [selected])
@@ -154,6 +177,45 @@ export function Chat(): React.JSX.Element {
   }, () => lastSeenRef.current)
 
   useEffect(() => () => { if (typingTimer.current) clearTimeout(typingTimer.current) }, [])
+
+  // Debounced search. A newer query supersedes any response still in flight.
+  const searchQuery = query.trim()
+  useEffect(() => {
+    if (searchQuery.length < 2) { setResults([]); setSearching(false); return }
+    let stale = false
+    setSearching(true)
+    const t = setTimeout(() => {
+      api.get<{ results: SearchHit[] }>(`/api/search?q=${encodeURIComponent(searchQuery)}`)
+        .then((res) => { if (!stale) setResults(res.results) })
+        .catch(() => { if (!stale) setResults([]) })
+        .finally(() => { if (!stale) setSearching(false) })
+    }, 250)
+    return () => { stale = true; clearTimeout(t) }
+  }, [searchQuery])
+
+  const openConversation = useCallback((id: string) => {
+    setHighlight(null)
+    setSelected(id)
+  }, [])
+  const openSearchHit = useCallback((hit: SearchHit) => {
+    highlightPages.current = 0
+    setHighlight({ conversationId: hit.conversationId, key: `${hit.authorId}:${hit.timestamp}` })
+    setSelected(hit.conversationId)
+  }, [])
+
+  // Disappearing messages: drop them from view once their timer runs out. The
+  // server stops returning them and sweeps them, but refreshTail only ever
+  // adds/replaces, so already-loaded ones must be removed here.
+  useEffect(() => {
+    const t = setInterval(() => {
+      const now = Date.now()
+      setMessages((prev) => {
+        const kept = prev.filter((m) => !m.expiresAt || m.expiresAt > now)
+        return kept.length === prev.length ? prev : kept
+      })
+    }, 10_000)
+    return () => clearInterval(t)
+  }, [])
 
   const onSend = useCallback(async (text: string, base64Attachments?: string[], quote?: { authorId: string; timestamp: number }) => {
     if (!selected) return
@@ -220,6 +282,35 @@ export function Chat(): React.JSX.Element {
     }
   }, [selected, conversations, refreshTail, toast])
 
+  // A file dropped outside the thread (sidebar, empty pane) would otherwise make
+  // the browser open it in place of the app. The thread's own handlers run first.
+  useEffect(() => {
+    const guard = (e: globalThis.DragEvent): void => {
+      if (e.dataTransfer?.types.includes('Files')) e.preventDefault()
+    }
+    window.addEventListener('dragover', guard)
+    window.addEventListener('drop', guard)
+    return () => {
+      window.removeEventListener('dragover', guard)
+      window.removeEventListener('drop', guard)
+    }
+  }, [])
+
+  // Drag-and-drop files anywhere on the open thread to queue them in the composer.
+  const isFileDrag = (e: DragEvent): boolean => Array.from(e.dataTransfer?.types ?? []).includes('Files')
+  const dropHandlers = selected ? {
+    onDragEnter: (e: DragEvent) => { if (!isFileDrag(e)) return; e.preventDefault(); dragDepth.current++; setDragging(true) },
+    onDragOver: (e: DragEvent) => { if (isFileDrag(e)) e.preventDefault() }, // required for drop to fire
+    onDragLeave: (e: DragEvent) => { if (!isFileDrag(e)) return; dragDepth.current = Math.max(0, dragDepth.current - 1); if (dragDepth.current === 0) setDragging(false) },
+    onDrop: (e: DragEvent) => {
+      if (!isFileDrag(e)) return
+      e.preventDefault()
+      dragDepth.current = 0
+      setDragging(false)
+      composerRef.current?.addFiles(Array.from(e.dataTransfer.files))
+    },
+  } : {}
+
   const selectedConv = conversations.find((c) => c.id === selected) ?? null
   const showThreadOnMobile = Boolean(selected)
   // Resolve a group sender to a display name: look the author up in the loaded
@@ -247,6 +338,17 @@ export function Chat(): React.JSX.Element {
             />
           </h1>
           <button
+            className={styles.settingsBtn}
+            onClick={() => setShowSettings(true)}
+            aria-label="Settings"
+            title="Settings"
+          >
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <circle cx="12" cy="12" r="3" />
+              <path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z" />
+            </svg>
+          </button>
+          <button
             className={styles.newBtn}
             onClick={() => setShowNew(true)}
             aria-label="New conversation"
@@ -257,14 +359,29 @@ export function Chat(): React.JSX.Element {
             </svg>
           </button>
         </div>
-        <ConversationList
-          conversations={conversations}
-          selectedId={selected}
-          onSelect={setSelected}
-          onDelete={setPendingDelete}
-        />
+        <div className={styles.searchBar}>
+          <input
+            className={styles.search}
+            type="search"
+            placeholder="Search messages"
+            aria-label="Search messages"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            onKeyDown={(e) => { if (e.key === 'Escape') setQuery('') }}
+          />
+        </div>
+        {searchQuery.length >= 2 ? (
+          <SearchResults query={searchQuery} results={results} loading={searching} onPick={openSearchHit} />
+        ) : (
+          <ConversationList
+            conversations={conversations}
+            selectedId={selected}
+            onSelect={openConversation}
+            onDelete={setPendingDelete}
+          />
+        )}
       </aside>
-      <main className={styles.main}>
+      <main className={`${styles.main} ${dragging ? styles.dragging : ''}`} {...dropHandlers}>
         {selected ? (
           <>
             <div className={styles.threadHeader}>
@@ -283,6 +400,11 @@ export function Chat(): React.JSX.Element {
                 {initials(selectedConv?.displayName ?? null)}
               </span>
               <span className={styles.threadName}>{selectedConv?.displayName ?? selectedConv?.id ?? selected}</span>
+              {selectedConv?.expireTimerMs ? (
+                <span className={styles.timerLabel} title="New messages in this chat disappear after this long">
+                  ⏱ {formatTimer(selectedConv.expireTimerMs)}
+                </span>
+              ) : null}
               <button
                 className={styles.infoBtn}
                 onClick={() => setShowInfo(true)}
@@ -304,8 +426,10 @@ export function Chat(): React.JSX.Element {
               typing={typing}
               isGroup={selectedConv?.type === 'group'}
               resolveName={resolveName}
+              highlightKey={highlight?.conversationId === selected ? highlight.key : null}
             />
             <Composer
+              ref={composerRef}
               onSend={onSend}
               replyTo={replyTo}
               onCancelReply={() => setReplyTo(null)}
@@ -327,7 +451,7 @@ export function Chat(): React.JSX.Element {
             // not depend on the reload completing (a swallowed rejection there
             // would otherwise leave the user on "Select a conversation").
             setShowNew(false)
-            setSelected(conversationId)
+            openConversation(conversationId)
             void loadConversations()
           }}
         />
@@ -344,6 +468,12 @@ export function Chat(): React.JSX.Element {
             void onDelete(conv)
           }}
           onCancel={() => setPendingDelete(null)}
+        />
+      ) : null}
+      {showSettings ? (
+        <Settings
+          onClose={() => setShowSettings(false)}
+          onLogout={async () => { setShowSettings(false); await onLogout?.() }}
         />
       ) : null}
       {showInfo && selected ? (

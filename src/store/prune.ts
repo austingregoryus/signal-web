@@ -17,6 +17,27 @@ export interface PruneResult {
  * delete the encrypted blob files (this module is sync-only and has no blob
  * store access; wiring blobs here keeps the pruning boundary in one place).
  */
+/**
+ * Delete disappearing messages whose timer has run out, with their reactions,
+ * receipts and attachment rows. Returns the attachment ids for blob deletion.
+ * Runs often (every ~30s) since timers can be as short as a few seconds.
+ */
+export function pruneExpired(store: Store, now: number): PruneResult {
+  const db = store.db
+  const expired = `SELECT author_id, timestamp FROM messages WHERE expires_at IS NOT NULL AND expires_at <= ?`
+  const attachmentIds = (
+    db.prepare(`SELECT id FROM attachments WHERE (message_author_id, message_timestamp) IN (${expired})`).all(now) as { id: string }[]
+  ).map((r) => r.id)
+  const tx = db.transaction(() => {
+    const reactions = db.prepare(`DELETE FROM reactions WHERE (target_author_id, target_timestamp) IN (${expired})`).run(now).changes
+    const receipts = db.prepare(`DELETE FROM receipts WHERE (target_author_id, target_timestamp) IN (${expired})`).run(now).changes
+    const attachments = db.prepare(`DELETE FROM attachments WHERE (message_author_id, message_timestamp) IN (${expired})`).run(now).changes
+    const messages = db.prepare('DELETE FROM messages WHERE expires_at IS NOT NULL AND expires_at <= ?').run(now).changes
+    return { messages, reactions, receipts, attachments }
+  })
+  return { ...tx(), attachmentIds }
+}
+
 export function pruneOlderThan(store: Store, now: number, windowMs: number = DEFAULT_WINDOW_MS): PruneResult {
   const cutoff = now - windowMs
   const db = store.db

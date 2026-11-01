@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, vi } from 'vitest'
 import { render, screen } from '@testing-library/react'
 import { Thread } from './Thread'
 import type { Message } from '../api/types'
@@ -20,5 +20,20 @@ describe('Thread', () => {
     render(<Thread messages={msgs} />)
     expect(screen.getByText(/edited/i)).toBeInTheDocument()
     expect(screen.getByText(/deleted/i)).toBeInTheDocument()
+  })
+  it('scrolls to and highlights a message picked from search', () => {
+    // jsdom has no scrollIntoView; stub it to record which element was targeted.
+    const scrolled: string[] = []
+    const original = Element.prototype.scrollIntoView
+    Element.prototype.scrollIntoView = vi.fn(function (this: Element) {
+      scrolled.push((this as HTMLElement).dataset.msgKey ?? '')
+    })
+    try {
+      const { container } = render(<Thread conversationId="c1" messages={msgs} highlightKey="a:2000" />)
+      expect(scrolled).toEqual(['a:2000'])
+      expect(container.querySelector('[data-msg-key="a:2000"]')?.className).toMatch(/highlighted/)
+    } finally {
+      Element.prototype.scrollIntoView = original
+    }
   })
 })

@@ -15,7 +15,7 @@ import { registerLinkRoute } from '../api/linkRoute'
 import { registerStaticSite } from '../api/static'
 import { AttachmentBlobStore } from '../store/attachmentsBlob'
 import { ProfileService } from '../profile/service'
-import { pruneOlderThan } from '../store/prune'
+import { pruneExpired, pruneOlderThan } from '../store/prune'
 import { reconcileConversationAliases } from '../store/reconcile'
 import { registerSecurityHeaders } from './securityHeaders'
 import fastifyWebsocket from '@fastify/websocket'
@@ -104,12 +104,23 @@ export async function main(): Promise<void> {
 
   // periodic maintenance
   setInterval(() => { void profile.refresh() }, 10 * 60_000).unref()
-  setInterval(() => {
-    const result = pruneOlderThan(store, Date.now())
-    if (result.attachmentIds.length > 0) {
-      void Promise.all(result.attachmentIds.map((id) => blobs.delete(id)))
+  const dropBlobs = (ids: string[]): void => {
+    if (ids.length > 0) void Promise.all(ids.map((id) => blobs.delete(id)))
+  }
+  // History window (MESSAGE_RETENTION_DAYS; 0 = keep forever).
+  if (config.retentionDays > 0) {
+    setInterval(() => {
+      dropBlobs(pruneOlderThan(store, Date.now(), config.retentionDays * DAY).attachmentIds)
+    }, 60 * 60_000).unref()
+  }
+  // Disappearing messages: timers can be seconds long, so sweep often.
+  const sweepExpired = (): void => {
+    try { dropBlobs(pruneExpired(store, Date.now()).attachmentIds) } catch (err) {
+      console.warn(`[store] expiry sweep failed: ${err instanceof Error ? err.message : String(err)}`)
     }
-  }, 60 * 60_000).unref()
+  }
+  sweepExpired()
+  setInterval(sweepExpired, 30_000).unref()
   void profile.refresh()
 
   const webDir = process.env.WEB_DIR ?? './web/dist'

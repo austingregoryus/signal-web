@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, afterEach } from 'vitest'
-import { api, ApiError } from './client'
+import { api, ApiError, onUnauthorized } from './client'
 
 afterEach(() => { vi.restoreAllMocks(); document.cookie = 'sw_csrf=; expires=Thu, 01 Jan 1970 00:00:00 GMT' })
 
@@ -22,5 +22,16 @@ describe('api client', () => {
     vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response('{"error":"x"}', { status: 401 }))
     await expect(api.get('/api/conversations')).rejects.toMatchObject({ status: 401 })
     await expect(api.get('/api/conversations')).rejects.toBeInstanceOf(ApiError)
+  })
+
+  it('reports session loss on an /api 401 but not on an /auth 401 (wrong password)', async () => {
+    const lost = vi.fn()
+    onUnauthorized(lost)
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async () => new Response('{}', { status: 401 }))
+    await api.post('/auth/login', { password: 'x' }).catch(() => {})
+    expect(lost).not.toHaveBeenCalled()
+    await api.get('/api/conversations').catch(() => {})
+    expect(lost).toHaveBeenCalledTimes(1)
+    onUnauthorized(null)
   })
 })

@@ -13,6 +13,7 @@
     "test:watch": "vitest",
     "link-device": "tsx src/signal/link.ts",
     "set-password": "tsx src/setPassword.ts",
+    "reset-security-keys": "tsx src/resetSecurityKeys.ts",
     "build:web": "npm --prefix web install && npm --prefix web run build"
   },
   "dependencies": {

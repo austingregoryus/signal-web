@@ -48,6 +48,17 @@ export function registerRestApi(app: FastifyInstance, deps: RestDeps): void {
 
   app.get('/api/conversations', auth, async () => store.conversations.list())
 
+  // Text search across every conversation, newest first. Matches are
+  // case-insensitive substrings of the message body; deleted and expired
+  // messages never match.
+  app.get<{ Querystring: { q?: string; limit?: string } }>('/api/search', auth, async (req) => {
+    const q = (req.query.q ?? '').trim()
+    if (q.length < 2) return { results: [] }
+    const rawLimit = Number(req.query.limit ?? 50)
+    const limit = Number.isFinite(rawLimit) ? Math.max(1, Math.min(rawLimit, 100)) : 50
+    return { results: store.messages.search(q.slice(0, 200), limit) }
+  })
+
   app.get<{ Params: { id: string }; Querystring: { limit?: string; before?: string } }>(
     '/api/conversations/:id/messages',
     auth,
@@ -165,10 +176,14 @@ export function registerRestApi(app: FastifyInstance, deps: RestDeps): void {
       )
       const ts = sent.timestamp || Date.now()
       store.conversations.ensure({ id: conversationId, type })
+      // signal-cli applies the conversation's disappearing timer on the wire;
+      // mirror it on our local copy so it expires here too.
+      const timerMs = store.conversations.getExpireTimer(conversationId)
       store.messages.upsert({
         conversationId, authorId: selfId, timestamp: ts, direction: 'out',
         body: message ?? null, quoteAuthorId: quoteAuthor ?? null, quoteTimestamp: quoteTimestamp ?? null,
         receivedAt: Date.now(),
+        expiresAt: timerMs > 0 ? ts + timerMs : null,
       })
       // Persist each attachment locally so the sender's own view renders it.
       // No signalId: we already have the bytes, so /api/attachments/:id serves
@@ -246,9 +261,11 @@ export function registerRestApi(app: FastifyInstance, deps: RestDeps): void {
       // exists, fold the (possibly just-created) number row into it.
       if (conversationId !== recipient) store.conversations.mergeInto(conversationId, recipient)
       store.conversations.ensure({ id: conversationId, type: 'dm', displayName: displayName ?? undefined })
+      const timerMs = store.conversations.getExpireTimer(conversationId)
       store.messages.upsert({
         conversationId, authorId: selfId, timestamp: ts, direction: 'out',
         body: message ?? null, receivedAt: Date.now(),
+        expiresAt: timerMs > 0 ? ts + timerMs : null,
       })
       for (let i = 0; i < parsed.length; i++) {
         const id = `${selfId}:${ts}:${i}`

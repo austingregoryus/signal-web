@@ -4,6 +4,14 @@ export class ApiError extends Error {
   }
 }
 
+// Called when an /api/* request comes back 401, i.e. the session ended
+// (expired, or "log out everywhere" from another device). /auth/* is excluded:
+// a wrong password is also a 401 and must not be treated as session loss.
+let unauthorizedHandler: (() => void) | null = null
+export function onUnauthorized(fn: (() => void) | null): void {
+  unauthorizedHandler = fn
+}
+
 function csrfToken(): string {
   const m = document.cookie.match(/(?:^|;\s*)sw_csrf=([^;]+)/)
   return m ? decodeURIComponent(m[1]) : ''
@@ -18,6 +26,7 @@ async function request<T>(method: string, path: string, body?: unknown): Promise
   }
   if (method !== 'GET' && method !== 'HEAD') headers['x-csrf-token'] = csrfToken()
   const res = await fetch(path, init)
+  if (res.status === 401 && path.startsWith('/api/')) unauthorizedHandler?.()
   if (!res.ok) throw new ApiError(res.status, `${method} ${path} -> ${res.status}`)
   const text = await res.text()
   return (text ? JSON.parse(text) : undefined) as T

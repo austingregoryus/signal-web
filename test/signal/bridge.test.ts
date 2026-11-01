@@ -36,6 +36,19 @@ describe('LiveBridge.handleEnvelope', () => {
     expect(evs.some((e) => e.type === 'message')).toBe(true)
   })
 
+  it('does not broadcast a bare disappearing-timer change (no notification)', () => {
+    const s = open()
+    const hub = new BrowserHub()
+    const c = fakeClient()
+    hub.add(c)
+    const bridge = new LiveBridge({ store: s, hub, selfId: fx.SELF, now: () => 5000 })
+    bridge.handleEnvelope({
+      envelope: { sourceUuid: 'alice-uuid', timestamp: 3000, dataMessage: { timestamp: 3000, expiresInSeconds: 300, isExpirationUpdate: true } },
+    })
+    expect(c.sent).toEqual([])
+    expect(s.conversations.getExpireTimer('alice-uuid')).toBe(300_000)
+  })
+
   it('broadcasts typing without storing it', () => {
     const s = open()
     const hub = new BrowserHub()

@@ -33,6 +33,13 @@
 .body {
   display: block;
   white-space: pre-wrap;
+  overflow-wrap: anywhere; /* long URLs wrap instead of widening the bubble */
+}
+
+.link {
+  color: inherit;
+  text-decoration: underline;
+  text-underline-offset: 2px;
 }
 
 /* Group sender label + avatar (inbound group messages only). */
@@ -118,3 +125,13 @@
 
 .row:hover .actionBtn { opacity: .7; }
 .actionBtn:hover { opacity: 1 !important; background: var(--hover-tint); }
+
+/* A message jumped to from search: ring the bubble, then fade it out. */
+.highlighted .bubble { box-shadow: 0 0 0 3px var(--accent); }
+@media (prefers-reduced-motion: no-preference) {
+  .highlighted .bubble { animation: searchFlash 2.5s ease-out forwards; }
+}
+@keyframes searchFlash {
+  0%, 60% { box-shadow: 0 0 0 3px var(--accent); }
+  100% { box-shadow: 0 0 0 3px transparent; }
+}
