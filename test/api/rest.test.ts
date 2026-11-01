@@ -81,6 +81,15 @@ describe('REST API', () => {
     expect(sendRes.statusCode).toBe(200)
   })
 
+  it('rejects an unauthenticated upload before reading its body', async () => {
+    // Over the 25 MB route limit: if auth ran after body parsing this would be 413.
+    const huge = 'A'.repeat(26 * 1024 * 1024)
+    for (const url of ['/api/send', '/api/start']) {
+      const res = await app.inject({ method: 'POST', url, payload: { conversationId: 'c1', type: 'dm', recipient: '+15551234567', message: huge } })
+      expect(res.statusCode).toBe(401)
+    }
+  })
+
   it('rejects unauthenticated access', async () => {
     const res = await app.inject({ method: 'GET', url: '/api/conversations' })
     expect(res.statusCode).toBe(401)

@@ -42,7 +42,9 @@ export const UPLOAD_BODY_LIMIT = 25 * 1024 * 1024
 export function registerRestApi(app: FastifyInstance, deps: RestDeps): void {
   const { store, client, selfId, blobs } = deps
   const auth = { preHandler: app.requireAuth }
-  const upload = { ...auth, bodyLimit: UPLOAD_BODY_LIMIT }
+  // Auth runs in onRequest (before the body is read) so an unauthenticated
+  // client can't make us buffer a 25 MB body just to be told 401.
+  const upload = { onRequest: app.requireAuth, bodyLimit: UPLOAD_BODY_LIMIT }
 
   app.get('/api/conversations', auth, async () => store.conversations.list())
 
