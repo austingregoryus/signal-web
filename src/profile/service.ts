@@ -1,8 +1,25 @@
 import type { Store } from '../store/store'
 import { normalizeGroupId } from '../store/groupId'
 
-interface ContactLike { number?: string; uuid?: string; name?: string; profileName?: string }
+interface ContactLike { number?: string; uuid?: string; name?: string; profileName?: string; message_expiration?: string }
 interface GroupLike { id: string; name?: string }
+
+/**
+ * signal-cli-rest-api's contact `message_expiration` ("86400s", "disabled", or
+ * a bare number of seconds) as ms; null when the field is absent or unreadable.
+ * As of signal-cli-rest-api 0.101 / signal-cli 0.14.8 the field is always empty
+ * (the REST layer reads `messageExpiration` but signal-cli emits
+ * `messageExpirationTime`), so until upstream fixes the name, timers are
+ * learned only from traffic — see DEPLOY.md troubleshooting.
+ */
+export function parseExpiration(raw: string | undefined): number | null {
+  if (raw == null) return null
+  const s = raw.trim().toLowerCase()
+  if (s === '') return null
+  if (s === 'disabled' || s === 'off') return 0
+  const m = /^(\d+)\s*s?$/.exec(s)
+  return m ? Number(m[1]) * 1000 : null
+}
 
 export interface ProfileDeps {
   store: Store
@@ -29,6 +46,10 @@ export class ProfileService {
         this.deps.store.conversations.ensure({ id, type: 'dm', displayName: name })
         named++
       }
+      // Seed the disappearing-message timer from signal-cli's contact store so
+      // sends from the web expire even before any traffic in the chat.
+      const timerMs = parseExpiration(c.message_expiration)
+      if (id && timerMs !== null) this.deps.store.conversations.setExpireTimer(id, timerMs)
     }
     for (const g of groups) {
       if (g.name) {

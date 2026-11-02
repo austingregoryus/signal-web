@@ -77,6 +77,15 @@ describe('Composer attachments', () => {
     expect(screen.queryByRole('img', { name: 'huge.png' })).toBeNull()
   })
 
+  it('keeps the "too big" error when another file in the same pick is fine', async () => {
+    render(<Composer onSend={vi.fn()} />)
+    const big = png('huge.png')
+    Object.defineProperty(big, 'size', { value: MAX_ATTACHMENT_BYTES + 1 })
+    await userEvent.upload(screen.getByLabelText('Attachment file'), [big, png('ok.png')])
+    expect(await screen.findByRole('img', { name: 'ok.png' })).toBeInTheDocument()
+    expect(screen.getByRole('alert')).toHaveTextContent(/huge\.png.*too big/i)
+  })
+
   it('accepts files handed over by a drop elsewhere on the page', async () => {
     const ref = createRef<ComposerHandle>()
     render(<Composer ref={ref} onSend={vi.fn()} />)

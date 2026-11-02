@@ -37,8 +37,15 @@ export class LiveBridge {
     if (kind === 'data' || kind === 'sync-sent') {
       const events = parseEnvelope(raw, this.deps.selfId)
       // A bare "timer changed" notice has nothing to show — don't fire a
-      // new-message poke (which would also pop a desktop notification).
-      if (events.every((e) => e.kind === 'timer' || e.kind === 'ignore')) return
+      // new-message poke (which would also pop a desktop notification). The
+      // sidebar and thread header do show the timer, so tell the browser to
+      // reload its conversation list.
+      const timer = events.find((e) => e.kind === 'timer')
+      if (timer && timer.kind === 'timer') {
+        this.deps.hub.broadcast({ type: 'conversation', conversationId: timer.conversationId } as LiveEvent)
+        return
+      }
+      if (events.every((e) => e.kind === 'ignore')) return
       const reaction = events.find((e) => e.kind === 'reaction')
       const msg = events.find((e) => e.kind === 'message')
       if (reaction && reaction.kind === 'reaction') {

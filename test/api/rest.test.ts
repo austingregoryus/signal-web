@@ -134,6 +134,12 @@ describe('REST API', () => {
     // LIKE wildcards in the query are literal, and very short queries return nothing.
     expect((await get('%%')).json().results).toEqual([]) // unescaped, this would match everything
     expect((await get('d')).json().results).toEqual([])
+    // Case folding covers more than ASCII (SQLite's LIKE alone would miss this).
+    store.messages.upsert({ conversationId: 'c1', authorId: 'a', timestamp: 2700, direction: 'in', body: 'École demain', receivedAt: 1 })
+    expect((await get('école')).json().results.map((r: { body: string }) => r.body)).toEqual(['École demain'])
+    // An empty limit falls back to the default rather than clamping to 1.
+    const empty = await app.inject({ method: 'GET', url: '/api/search?q=dinner&limit=', cookies: { sw_session: session } })
+    expect(empty.json().results).toHaveLength(2)
   })
 
   it('requires auth to search', async () => {

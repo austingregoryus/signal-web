@@ -173,6 +173,12 @@ the password you set. Done.
   `docker compose exec app npm run reset-security-keys`. It removes every
   registered key and signs out all sessions; logging in then needs only the
   password, and a new key can be added under Settings.
+- **Messages sent from the web don't disappear in a chat that has a timer:**
+  the app learns a chat's timer from the first message or timer change it sees
+  in that chat (signal-cli-rest-api 0.101 doesn't report timers in its contact
+  list). Send one message from the phone, or toggle the timer off and on there;
+  web sends after that expire on schedule. Earlier web copies stay until
+  `MESSAGE_RETENTION_DAYS` removes them.
 - **Can't send/receive after a signal-cli bump:** Signal's servers reject
   outdated clients. Check the `bbernhard/signal-cli-rest-api` version matches
   what the README expects.

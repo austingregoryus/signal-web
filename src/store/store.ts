@@ -27,6 +27,9 @@ export function openStore(path: string, key: string): Store {
   // Key MUST be set before any other statement.
   db.pragma(`key = '${key.replace(/'/g, "''")}'`)
   db.pragma('journal_mode = WAL')
+  // Unicode-aware lower-casing for search; SQLite's own LIKE and lower() fold
+  // ASCII only, so "École" would never match "école".
+  db.function('fold', { deterministic: true }, (s: unknown) => (typeof s === 'string' ? s.toLowerCase() : null))
   db.exec(SCHEMA_SQL)
 
   const existing = db.prepare('SELECT version FROM schema_meta').get() as

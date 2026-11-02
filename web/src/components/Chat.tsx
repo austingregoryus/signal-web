@@ -124,6 +124,18 @@ export function Chat({ onLogout }: { onLogout?: () => void | Promise<void> } = {
     highlightPages.current++
     void loadMore(selected, messages[0].timestamp)
   }, [highlight, selected, messages, hasMore, loadingMore, loadMore])
+  // Once the picked message is on screen, let the flash run and then drop the
+  // highlight — otherwise the ring would stay on for users with reduced motion
+  // (whose flash never fades) until they open another conversation.
+  const highlightLoaded = Boolean(
+    highlight && highlight.conversationId === selected
+      && messages.some((m) => `${m.authorId}:${m.timestamp}` === highlight.key),
+  )
+  useEffect(() => {
+    if (!highlightLoaded) return
+    const t = setTimeout(() => setHighlight(null), 4000)
+    return () => clearTimeout(t)
+  }, [highlight, highlightLoaded])
 
   useEffect(() => { void loadConversations() }, [loadConversations])
   useEffect(() => { if (selected) void loadThread(selected) }, [selected, loadThread])
@@ -166,6 +178,9 @@ export function Chat({ onLogout }: { onLogout?: () => void | Promise<void> } = {
         new Notification(title, body ? { body } : undefined)
       }
     }
+    // A conversation's disappearing timer changed: the sidebar and thread
+    // header show it, so reload the list (no thread refresh, no notification).
+    if (ev.type === 'conversation') void loadConversations()
     if (ev.type === 'typing') {
       // Resolve the typing sender's name; null falls back to a generic indicator.
       const source = typeof ev.source === 'string' ? ev.source : null
@@ -429,6 +444,9 @@ export function Chat({ onLogout }: { onLogout?: () => void | Promise<void> } = {
               highlightKey={highlight?.conversationId === selected ? highlight.key : null}
             />
             <Composer
+              // Remount per conversation so a draft and, above all, queued
+              // attachments can't follow the user into another chat.
+              key={selected}
               ref={composerRef}
               onSend={onSend}
               replyTo={replyTo}

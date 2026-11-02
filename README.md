@@ -6,7 +6,7 @@ messages stay on infrastructure you control, encrypted at rest.
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](./LICENSE)
 ![Status](https://img.shields.io/badge/status-active-brightgreen)
-![Tests](https://img.shields.io/badge/tests-256%20passing-success)
+![Tests](https://img.shields.io/badge/tests-260%20passing-success)
 
 > ⚠️ **This is unofficial, community-built software.** It is not affiliated with,
 > endorsed by, or maintained by the Signal Foundation. Signal is a trademark of the
@@ -195,7 +195,7 @@ All config is via environment variables (`.env`). See
 | `RP_ID` | prod | The registrable domain (for WebAuthn/passkeys) |
 | `ENABLE_LINK_PAGE` | link | `true` only during device linking; `false` in production |
 | `LINK_BOOTSTRAP_TOKEN` | link | A random token you choose to gate `/link` before the password is set |
-| `MESSAGE_RETENTION_DAYS` | no | Delete messages older than this many days (default `14`; `0` keeps them forever). Disappearing-message timers set in Signal still apply. |
+| `MESSAGE_RETENTION_DAYS` | no | Delete messages older than this many days (default `14`; `0` keeps them forever). Disappearing-message timers set in Signal still apply, once the app has seen a message or timer change in that chat (see [DEPLOY.md](DEPLOY.md) troubleshooting). |
 
 ## Development
 
@@ -206,8 +206,8 @@ signal-cli-rest-api. TypeScript throughout, no framework magic.
 npm install              # backend deps
 npm --prefix web install # frontend deps
 
-npm test                 # backend tests (199)
-npm --prefix web test    # frontend tests (57)
+npm test                 # backend tests (202)
+npm --prefix web test    # frontend tests (58)
 npm run typecheck        # backend tsc
 npm --prefix web run typecheck
 npm run dev              # backend with watch (tsx)

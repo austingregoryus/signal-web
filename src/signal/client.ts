@@ -20,6 +20,8 @@ export interface Contact {
   uuid?: string
   name?: string
   profileName?: string
+  /** Disappearing-message timer, e.g. "86400s" or "disabled"; empty with current signal-cli (see profile/service.ts). */
+  message_expiration?: string
 }
 
 export interface GroupInfo {

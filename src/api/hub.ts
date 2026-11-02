@@ -5,7 +5,7 @@ export interface HubClient {
   send(data: string): void
 }
 
-export type LiveEvent = { type: 'message' | 'reaction' | 'receipt' | 'typing' } & Record<string, unknown>
+export type LiveEvent = { type: 'message' | 'reaction' | 'receipt' | 'typing' | 'conversation' } & Record<string, unknown>
 
 export class BrowserHub {
   private readonly clients = new Set<HubClient>()

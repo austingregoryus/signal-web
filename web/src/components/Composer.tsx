@@ -59,9 +59,11 @@ export function Composer({
 
   function addFiles(files: File[]): void {
     if (isEditing || files.length === 0) return // Signal edits are text-only
+    let rejected = false
     for (const file of files) {
       if (pendingBytes.current + file.size > MAX_ATTACHMENT_BYTES) {
         setError(`"${file.name || 'That file'}" is too big — attachments are limited to 18 MB per message`)
+        rejected = true
         continue
       }
       pendingBytes.current += file.size
@@ -73,7 +75,8 @@ export function Composer({
       readAsDataUrl(file).then(
         (dataUrl) => {
           setPending((prev) => [...prev, { id, name: file.name || 'Pasted image', contentType: file.type, size: file.size, dataUrl }])
-          setError(null)
+          // Reads resolve after the loop: don't wipe a sibling's "too big" message.
+          if (!rejected) setError(null)
         },
         () => {
           pendingBytes.current -= file.size

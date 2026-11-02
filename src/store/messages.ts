@@ -125,18 +125,20 @@ export class MessageRepo {
 
   /**
    * Case-insensitive substring search over message text across all
-   * conversations, newest-first. Skips deleted and expired messages.
+   * conversations, newest-first. Skips deleted and expired messages. Both
+   * sides are lower-cased in JS (`fold`, registered in openStore) because
+   * SQLite's LIKE only folds ASCII.
    */
   search(query: string, limit: number, now = Date.now()): SearchHit[] {
     const rows = this.db
       .prepare(
         `SELECT m.*, c.display_name AS conversation_name, c.type AS conversation_type
          FROM messages m LEFT JOIN conversations c ON c.id = m.conversation_id
-         WHERE m.deleted = 0 AND m.body LIKE ? ESCAPE '\\'
+         WHERE m.deleted = 0 AND fold(m.body) LIKE ? ESCAPE '\\'
            AND (m.expires_at IS NULL OR m.expires_at > ?)
          ORDER BY m.timestamp DESC LIMIT ?`,
       )
-      .all(`%${likeEscape(query)}%`, now, limit) as Array<Row & { conversation_name: string | null; conversation_type: 'dm' | 'group' | null }>
+      .all(`%${likeEscape(query.toLowerCase())}%`, now, limit) as Array<Row & { conversation_name: string | null; conversation_type: 'dm' | 'group' | null }>
     return rows.map((r) => ({ ...toStored(r), conversationName: r.conversation_name, conversationType: r.conversation_type }))
   }
 

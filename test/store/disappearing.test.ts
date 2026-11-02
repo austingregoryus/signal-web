@@ -101,6 +101,24 @@ describe('disappearing messages', () => {
     expect(s.messages.listByConversation('c', 10, undefined, 0).map((m) => m.body)).toEqual(['kept'])
   })
 
+  it('leaves reactions, receipts and attachments alone while a live copy of the same send remains', () => {
+    const s = open()
+    s.conversations.ensure({ id: 'dm', type: 'dm' })
+    s.conversations.ensure({ id: 'grp', type: 'group' })
+    // One multi-recipient send: the same (author, timestamp) lands in two
+    // conversations, and only the DM has a disappearing timer.
+    s.messages.upsert({ conversationId: 'dm', authorId: 'a', timestamp: 100, direction: 'in', body: 'pic', receivedAt: 100, expiresAt: 1000 })
+    s.messages.upsert({ conversationId: 'grp', authorId: 'a', timestamp: 100, direction: 'in', body: 'pic', receivedAt: 100 })
+    s.reactions.apply({ targetAuthorId: 'a', targetTimestamp: 100, reactorId: 'me', emoji: '👍', timestamp: 150 })
+    s.receipts.record({ targetAuthorId: 'a', targetTimestamp: 100, recipientId: 'b', type: 'read', timestamp: 150 })
+    s.attachments.add({ id: 'att1', messageAuthorId: 'a', messageTimestamp: 100, contentType: 'image/png', size: 3, signalId: null })
+
+    const res = pruneExpired(s, 1000)
+    expect(res).toMatchObject({ messages: 1, reactions: 0, receipts: 0, attachments: 0, attachmentIds: [] })
+    expect(s.messages.listByConversation('grp', 10, undefined, 0)).toHaveLength(1)
+    expect((s.db.prepare('SELECT COUNT(*) AS n FROM attachments').get() as { n: number }).n).toBe(1)
+  })
+
   it('adds the expiry columns when opening a DB created before they existed', () => {
     const p = tmp()
     const legacy = new Database(p)

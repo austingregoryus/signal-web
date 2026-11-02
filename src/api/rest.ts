@@ -54,7 +54,7 @@ export function registerRestApi(app: FastifyInstance, deps: RestDeps): void {
   app.get<{ Querystring: { q?: string; limit?: string } }>('/api/search', auth, async (req) => {
     const q = (req.query.q ?? '').trim()
     if (q.length < 2) return { results: [] }
-    const rawLimit = Number(req.query.limit ?? 50)
+    const rawLimit = req.query.limit ? Number(req.query.limit) : 50
     const limit = Number.isFinite(rawLimit) ? Math.max(1, Math.min(rawLimit, 100)) : 50
     return { results: store.messages.search(q.slice(0, 200), limit) }
   })
