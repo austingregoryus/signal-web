@@ -1,5 +1,5 @@
 import type { Conversation } from '../api/types'
-import { avatarColor, initials } from './avatar'
+import { avatarColor, conversationLabel, initials } from './avatar'
 import styles from './ConversationList.module.css'
 
 export function ConversationList({
@@ -21,7 +21,7 @@ export function ConversationList({
             <span className={styles.avatar} style={{ background: avatarColor(c.id) }} aria-hidden>
               {c.type === 'group' ? '👥' : initials(c.displayName)}
             </span>
-            <span className={styles.name}>{c.displayName ?? c.id}</span>
+            <span className={styles.name}>{conversationLabel(c)}</span>
             {c.unreadCount > 0 ? (
               <span className={styles.badge} aria-label={`${c.unreadCount} unread`}>
                 {c.unreadCount > 99 ? '99+' : c.unreadCount}
@@ -31,7 +31,7 @@ export function ConversationList({
           {onDelete ? (
             <button
               className={styles.deleteBtn}
-              aria-label={`Delete conversation with ${c.displayName ?? c.id}`}
+              aria-label={`Delete conversation with ${conversationLabel(c)}`}
               title="Delete conversation"
               onClick={() => onDelete(c)}
             >

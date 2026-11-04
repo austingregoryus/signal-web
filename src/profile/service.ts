@@ -1,7 +1,15 @@
 import type { Store } from '../store/store'
 import { normalizeGroupId } from '../store/groupId'
 
-interface ContactLike { number?: string; uuid?: string; name?: string; profileName?: string; message_expiration?: string }
+interface ContactLike {
+  number?: string
+  uuid?: string
+  name?: string
+  /** What signal-cli-rest-api actually sends for the contact's own profile name. */
+  profile_name?: string
+  profileName?: string
+  message_expiration?: string
+}
 interface GroupLike { id: string; name?: string }
 
 /**
@@ -32,12 +40,18 @@ export class ProfileService {
 
   async refresh(): Promise<{ named: number }> {
     let named = 0
+    // A failed fetch leaves existing names alone, but say so: a silent failure
+    // here once left every conversation showing a raw id until the next run.
+    const warn = (what: string) => (err: unknown): never[] => {
+      console.warn(`[profile] ${what} refresh failed: ${err instanceof Error ? err.message : String(err)}`)
+      return []
+    }
     const [contacts, groups] = await Promise.all([
-      this.deps.client.listContacts().catch(() => [] as ContactLike[]),
-      this.deps.client.listGroups().catch(() => [] as GroupLike[]),
+      this.deps.client.listContacts().catch(warn('contact')) as Promise<ContactLike[]>,
+      this.deps.client.listGroups().catch(warn('group')) as Promise<GroupLike[]>,
     ])
     for (const c of contacts) {
-      const name = c.name || c.profileName
+      const name = c.name || c.profile_name || c.profileName
       const id = c.uuid || c.number
       // Seed the alias table so a number-keyed conversation can later be folded
       // into the UUID when both identifiers are present.

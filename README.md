@@ -6,7 +6,7 @@ messages stay on infrastructure you control, encrypted at rest.
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](./LICENSE)
 ![Status](https://img.shields.io/badge/status-active-brightgreen)
-![Tests](https://img.shields.io/badge/tests-260%20passing-success)
+![Tests](https://img.shields.io/badge/tests-264%20passing-success)
 
 > ⚠️ **This is unofficial, community-built software.** It is not affiliated with,
 > endorsed by, or maintained by the Signal Foundation. Signal is a trademark of the
@@ -206,8 +206,8 @@ signal-cli-rest-api. TypeScript throughout, no framework magic.
 npm install              # backend deps
 npm --prefix web install # frontend deps
 
-npm test                 # backend tests (202)
-npm --prefix web test    # frontend tests (58)
+npm test                 # backend tests (205)
+npm --prefix web test    # frontend tests (59)
 npm run typecheck        # backend tsc
 npm --prefix web run typecheck
 npm run dev              # backend with watch (tsx)

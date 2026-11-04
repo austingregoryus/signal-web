@@ -19,6 +19,8 @@ export interface Contact {
   number?: string
   uuid?: string
   name?: string
+  /** The contact's own Signal profile name, as signal-cli-rest-api sends it. */
+  profile_name?: string
   profileName?: string
   /** Disappearing-message timer, e.g. "86400s" or "disabled"; empty with current signal-cli (see profile/service.ts). */
   message_expiration?: string

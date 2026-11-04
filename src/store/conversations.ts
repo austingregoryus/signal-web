@@ -10,6 +10,11 @@ export interface StoredConversation {
   id: string
   type: 'dm' | 'group'
   displayName: string | null
+  /**
+   * The contact's phone number when known, so a contact with no name shows a
+   * number rather than a raw UUID. Null for groups and unknown numbers.
+   */
+  number: string | null
   avatarPath: string | null
   lastActivity: number
   lastReadAt: number
@@ -26,6 +31,7 @@ interface Row {
   last_activity: number
   last_read_at: number
   expire_timer_ms: number
+  alias_number: string | null
 }
 
 export class ConversationRepo {
@@ -54,7 +60,11 @@ export class ConversationRepo {
 
   list(): StoredConversation[] {
     const rows = this.db
-      .prepare('SELECT * FROM conversations ORDER BY last_activity DESC')
+      .prepare(
+        `SELECT c.*,
+           (SELECT a.number FROM contact_aliases a WHERE a.uuid = c.id ORDER BY a.rowid DESC LIMIT 1) AS alias_number
+         FROM conversations c ORDER BY c.last_activity DESC`,
+      )
       .all() as Row[]
     return rows.map((r) => {
       // Unread = inbound messages newer than the last-read cursor.
@@ -67,6 +77,8 @@ export class ConversationRepo {
         id: r.id,
         type: r.type,
         displayName: r.display_name,
+        // A DM keyed by number (no UUID known yet) already is the number.
+        number: r.type === 'dm' ? (r.alias_number ?? (r.id.startsWith('+') ? r.id : null)) : null,
         avatarPath: r.avatar_path,
         lastActivity: r.last_activity,
         lastReadAt: r.last_read_at,

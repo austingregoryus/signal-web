@@ -19,6 +19,11 @@ export function avatarColor(id: string): string {
   return PALETTE[idx]
 }
 
+/** What to call a conversation: its name, else the contact's number, else the raw id. */
+export function conversationLabel(c: { id: string; displayName: string | null; number?: string | null }): string {
+  return c.displayName ?? c.number ?? c.id
+}
+
 /** Derive 1-2 letter initials from a display name, or a fallback glyph. */
 export function initials(name: string | null): string {
   if (!name) return '#'

@@ -1,4 +1,4 @@
-import { describe, it, expect, afterEach } from 'vitest'
+import { describe, it, expect, afterEach, vi } from 'vitest'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { rmSync } from 'node:fs'
@@ -38,6 +38,34 @@ describe('ProfileService.refresh', () => {
     expect(byId['group-xyz']).toBe('Family')
     expect(byId['bob-uuid']).toBeNull() // stays on number-fallback
     expect(res.named).toBe(2)
+  })
+
+  it("uses the contact's own profile name when there is no saved name", async () => {
+    const s = open()
+    const client = {
+      listContacts: async () => [{ uuid: 'erin-uuid', number: '+15551110005', name: '', profile_name: 'Erin P' }],
+      listGroups: async () => [],
+    }
+    await new ProfileService({ store: s, client, avatarDir: tmpdir() }).refresh()
+    expect(s.conversations.list().find((c) => c.id === 'erin-uuid')?.displayName).toBe('Erin P')
+  })
+
+  it('logs a failed fetch instead of hiding it, and keeps existing names', async () => {
+    const s = open()
+    s.conversations.ensure({ id: 'alice-uuid', type: 'dm', displayName: 'Alice' })
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    try {
+      const client = {
+        listContacts: async () => { throw new Error('connect ECONNREFUSED') },
+        listGroups: async () => [],
+      }
+      const res = await new ProfileService({ store: s, client, avatarDir: tmpdir() }).refresh()
+      expect(res.named).toBe(0)
+      expect(warn).toHaveBeenCalledWith(expect.stringMatching(/contact refresh failed: connect ECONNREFUSED/))
+      expect(s.conversations.list()[0].displayName).toBe('Alice')
+    } finally {
+      warn.mockRestore()
+    }
   })
 
   it('seeds disappearing timers from the contact list when signal-cli reports them', async () => {

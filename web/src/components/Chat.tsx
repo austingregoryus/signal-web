@@ -11,7 +11,7 @@ import { ConversationInfo } from './ConversationInfo'
 import { Settings } from './Settings'
 import { SearchResults } from './SearchResults'
 import { useToast } from './Toast'
-import { avatarColor, initials } from './avatar'
+import { avatarColor, conversationLabel, initials } from './avatar'
 import { formatTimer } from './formatTimer'
 import styles from './Chat.module.css'
 
@@ -414,7 +414,7 @@ export function Chat({ onLogout }: { onLogout?: () => void | Promise<void> } = {
               >
                 {initials(selectedConv?.displayName ?? null)}
               </span>
-              <span className={styles.threadName}>{selectedConv?.displayName ?? selectedConv?.id ?? selected}</span>
+              <span className={styles.threadName}>{selectedConv ? conversationLabel(selectedConv) : selected}</span>
               {selectedConv?.expireTimerMs ? (
                 <span className={styles.timerLabel} title="New messages in this chat disappear after this long">
                   ⏱ {formatTimer(selectedConv.expireTimerMs)}
@@ -477,7 +477,7 @@ export function Chat({ onLogout }: { onLogout?: () => void | Promise<void> } = {
       {pendingDelete ? (
         <ConfirmDialog
           title="Delete conversation?"
-          message={`This permanently removes "${pendingDelete.displayName ?? pendingDelete.id}" and all its messages from this device. The other person keeps their copy.`}
+          message={`This permanently removes "${conversationLabel(pendingDelete)}" and all its messages from this device. The other person keeps their copy.`}
           confirmLabel="Delete"
           destructive
           onConfirm={() => {

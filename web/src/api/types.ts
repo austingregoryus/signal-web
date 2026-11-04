@@ -1,5 +1,7 @@
 export interface Conversation {
   id: string; type: 'dm' | 'group'; displayName: string | null; avatarPath: string | null
+  /** The contact's phone number when known (DMs only); shown when there's no name. */
+  number?: string | null
   lastActivity: number; unreadCount: number
   /** Disappearing-message timer for new messages; 0 = off. */
   expireTimerMs?: number

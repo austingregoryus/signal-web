@@ -42,13 +42,26 @@ export async function main(): Promise<void> {
     console.warn(`[store] reconcile failed: ${err instanceof Error ? err.message : String(err)}`)
   }
 
+  const refreshNames = (): void => {
+    profile.refresh().catch((err: unknown) => {
+      console.warn(`[profile] refresh failed: ${err instanceof Error ? err.message : String(err)}`)
+    })
+  }
+
   // Live connection state of the signal-cli receiver, surfaced on the linking page.
   const signalState = { connected: false }
   const receiver = new SignalReceiver({
     wsBaseUrl: config.signalWsUrl,
     signalNumber: config.signalNumber,
     onEvent: (ev) => bridge.handleEnvelope(ev.raw),
-    onOpen: () => { signalState.connected = true; console.log('[signal] connected to signal-cli') },
+    onOpen: () => {
+      signalState.connected = true
+      console.log('[signal] connected to signal-cli')
+      // Load contact and group names now that signal-cli answers. A refresh at
+      // process start races signal-cli's own boot and would leave every
+      // conversation unnamed until the 10-minute timer.
+      refreshNames()
+    },
     onClose: (code) => { signalState.connected = false; console.log(`[signal] disconnected (code=${code})`) },
     onError: (err) => console.error(`[signal] receiver error: ${err.message}`),
     reconnect: { minDelayMs: 1000, maxDelayMs: 30_000 },
@@ -103,7 +116,7 @@ export async function main(): Promise<void> {
   })
 
   // periodic maintenance
-  setInterval(() => { void profile.refresh() }, 10 * 60_000).unref()
+  setInterval(refreshNames, 10 * 60_000).unref()
   const dropBlobs = (ids: string[]): void => {
     if (ids.length > 0) void Promise.all(ids.map((id) => blobs.delete(id)))
   }
@@ -121,7 +134,6 @@ export async function main(): Promise<void> {
   }
   sweepExpired()
   setInterval(sweepExpired, 30_000).unref()
-  void profile.refresh()
 
   const webDir = process.env.WEB_DIR ?? './web/dist'
   try {

@@ -14,6 +14,12 @@ describe('ConversationList', () => {
     expect(screen.getByText('Alice')).toBeInTheDocument()
     expect(screen.getByText('+15551110002')).toBeInTheDocument()
   })
+  it('shows the phone number instead of the raw id for an unnamed contact', () => {
+    const unnamed = [{ id: 'bob-uuid', type: 'dm' as const, displayName: null, number: '+15551110003', avatarPath: null, lastActivity: 1, unreadCount: 0 }]
+    render(<ConversationList conversations={unnamed} selectedId={null} onSelect={() => {}} />)
+    expect(screen.getByText('+15551110003')).toBeInTheDocument()
+    expect(screen.queryByText('bob-uuid')).toBeNull()
+  })
   it('calls onSelect when a row is clicked', async () => {
     const onSelect = vi.fn()
     render(<ConversationList conversations={convs} selectedId={null} onSelect={onSelect} />)

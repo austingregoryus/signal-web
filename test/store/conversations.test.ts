@@ -25,6 +25,23 @@ describe('ConversationRepo', () => {
     expect(list[0]).toMatchObject({ id: 'c1', type: 'dm', displayName: 'Alice', lastActivity: 0 })
   })
 
+  it('reports a phone number for DMs so unnamed contacts can show it', () => {
+    const s = open()
+    s.conversations.ensure({ id: 'bob-uuid', type: 'dm' })
+    s.conversations.ensure({ id: '+15551110004', type: 'dm' })
+    s.conversations.ensure({ id: 'stranger-uuid', type: 'dm' })
+    s.conversations.ensure({ id: 'grp', type: 'group' })
+    s.conversations.linkAlias('+15551110003', 'bob-uuid')
+    s.conversations.linkAlias('+15559990000', 'grp') // never applies to a group
+    const byId = Object.fromEntries(s.conversations.list().map((c) => [c.id, c.number]))
+    expect(byId).toEqual({
+      'bob-uuid': '+15551110003',
+      '+15551110004': '+15551110004',
+      'stranger-uuid': null,
+      grp: null,
+    })
+  })
+
   it('ensure does not overwrite an existing name with null', () => {
     const s = open()
     s.conversations.ensure({ id: 'c1', type: 'dm', displayName: 'Alice' })
